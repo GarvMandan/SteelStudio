@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c \"import ast; ast.parse\\(open\\('grid_gui.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(ls .venv/Scripts/python.exe)",
+      "Bash(.venv/Scripts/python.exe -c \"import ast; ast.parse\\(open\\('grid_gui.py', encoding='utf-8'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(py -c \"import ttkbootstrap; print\\(ttkbootstrap.__version__\\)\")"
+    ]
+  }
+}

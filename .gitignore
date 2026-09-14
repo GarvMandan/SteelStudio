@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# PyInstaller / installer output (legacy desktop app)
+/build/
+/dist/
+/installer_output/
+/*.zip
+
+# Frontend
+visualizer/node_modules/
+visualizer/test-results/
+visualizer/playwright-report/
+# The compiled bundle IS committed so end users need no Node.
+# Only the sourcemaps are excluded (4.2 MB of debug-only payload).
+visualizer/dist/*.map
+
+# Scratch and generated output
+/tmp/
+/output/
+.steel-studio-*.json
+Structural_Steel_Report_*.pdf
