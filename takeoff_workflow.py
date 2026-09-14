@@ -1,8 +1,11 @@
-"""Run the desktop application's established takeoff workflow without opening Tk.
+"""Run the established takeoff workflow.
 
-The catalog selectors, roof constraints, footing math, and wall takeoff are the
-original SteelGridApp methods. Only their UI state is replaced by small values.
-This keeps the desktop and Studio on the same calculation rules.
+Orchestrates the original calculation rules, which now live in GUI-free
+modules: catalogs, selection, roof, demand_groups and foundations. The
+desktop application is no longer involved.
+
+Inputs still arrive wrapped in Value shims so the modules keep the
+accessor shape the original code expected.
 """
 from copy import deepcopy
 from functools import lru_cache
@@ -10,11 +13,12 @@ import math
 from pathlib import Path
 
 import catalogs
+import demand_groups
 import foundations
 import roof as roof_profile
 import selection
 from calculation_engine import InputValidationError
-from grid_gui import GridModel, SteelGridApp
+from grid_model import GridModel
 
 
 class Value:
@@ -39,8 +43,8 @@ def catalog_rows():
     return joists, lh, catalogs.build_girder_catalog_index(girders), columns
 
 
-class Workflow(SteelGridApp):
-    """A calculation-only context; no Tk root, widgets, or desktop init."""
+class Workflow:
+    """A calculation-only context; holds project state between steps."""
 
     def __init__(self, project, results):
         self.project = project
@@ -150,11 +154,16 @@ class Workflow(SteelGridApp):
         return profile
 
     def select_remaining(self):
-        groups = self._build_girder_demand_groups(self.last_girder_result["girder_calculations"])
+        profile = self._build_roof_profile_data()
+        groups = demand_groups.build_girder_demand_groups(
+            self.last_girder_result["girder_calculations"],
+            roof_profile.allowed_girder_depth_by_line_in(profile))
         self._record("girders", groups, lambda: selection.compute_girder_auto_assignments(groups, self.girder_index))
-        groups = self._build_column_demand_groups(self.last_column_result["column_calculations"])
+        heights, clear_ft = demand_groups.column_height_by_line_ft(profile, self.clear_height_var.get())
+        groups = demand_groups.build_column_demand_groups(
+            self.last_column_result["column_calculations"], heights, clear_ft)
         self._record("columns", groups, lambda: selection.compute_column_auto_assignments(groups, self.column_rows, self.project["clear_height_ft"]))
-        groups = self._build_mezz_girder_groups_for_assignment()
+        groups = demand_groups.mezz_girder_groups_for_assignment(self.last_mezz_result)
         self._record("mezz_girders", groups, lambda: selection.compute_girder_auto_assignments(groups, self.girder_index))
         groups = self.last_mezz_result["mezzanine_column_demand_groups"]
         self._record("mezz_columns", groups, lambda: selection.compute_mezz_column_auto_assignments(groups, self.column_rows))
