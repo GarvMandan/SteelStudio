@@ -100,7 +100,20 @@ The default landscape-letter report keeps individual member rows out of the main
 
 ## Development and verification
 
-`calculation_engine.py` remains unchanged. `steel_model.py` normalizes projects, runs the four original demand calculators, and builds physical members. `takeoff_workflow.py` reuses the original `SteelGridApp` catalog-selection, roof, footing, and wall routines without creating a desktop window. `visualizer.py` provides the local HTTP API. React and Three.js sources live in `visualizer/src`.
+`calculation_engine.py` remains unchanged and provides the four demand calculators. `steel_model.py` normalizes projects, runs those calculators, and builds physical members. `takeoff_workflow.py` orchestrates the takeoff; it is a plain class with no desktop dependency. `visualizer.py` provides the local HTTP API. React and Three.js sources live in `visualizer/src`.
+
+The original selection and geometry rules were extracted out of the desktop application into GUI-free modules, each verified to reproduce the original results exactly:
+
+| Module | Responsibility |
+| --- | --- |
+| `catalogs.py` | Excel catalog readers and section indexes |
+| `selection.py` | Automatic joist, girder and column selection |
+| `roof.py` | Roof profile, slopes, TOJ elevations, girder depth limits |
+| `demand_groups.py` | Demand grouping and group IDs |
+| `foundations.py` | Pad footings and tilt wall area |
+| `grid_model.py` | Bay/grid geometry |
+
+A calculation loads none of `tkinter`, `ttkbootstrap` or `grid_gui`.
 
 ```powershell
 cd visualizer
