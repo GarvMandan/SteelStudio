@@ -38,6 +38,7 @@ def defaults():
         "speed_bay_rows": [], "footing_depth_ft": 1.0, "bearing_capacity_psf": 3000.0,
         "metal_deck_thickness_in": 1.5, "insulation_depth_in": 3.0,
         "single_slope_direction": "North", "joist_seat_depth_in": 2.5,
+        "location_city": "", "location_state": "",
         "load_inputs_psf": {"dead_load_psf": 20.0, "live_load_psf": 20.0,
                             "snow_load_psf": 30.0, "snow_code": "ASCE 7-16",
                             "reduced_snow_load_psf_manual": 0.0,
@@ -184,6 +185,11 @@ def normalize_project(project):
     active = all_bays - inactive
     if not active:
         raise InputValidationError("At least one bay must remain active.")
+    for key in ("location_city", "location_state"):
+        value = p.get(key, "")
+        if not isinstance(value, str):
+            raise InputValidationError(f"{key.replace('_', ' ').title()} must be text.")
+        p[key] = value.strip()[:120]
     p["inactive_bays"] = _serialize_bays(inactive)
     p["collateral_bays"] = _serialize_bays(_bay_indices(p["collateral_bays"], nx, ny, "Collateral bays") & active)
     overrides = {}

@@ -221,3 +221,48 @@
   .studio-workspace .view-takeoffs .takeoff-report{margin:0 20px 20px}.studio-workspace .report-tabs{flex-wrap:wrap}.studio-workspace .report-tabs button{padding:8px 11px;font-size:12px}.studio-workspace .view-roof .roof-section.large{margin:0 20px 20px;width:calc(100% - 40px);height:320px;min-height:320px}
   .studio-workspace .grid-controls .control-section:first-child{display:block}.grid-controls .quick-grid-fields{grid-template-columns:1fr 1fr}.studio-workspace .full-workspace.mode-3d{display:block!important;overflow:auto}.studio-workspace .mode-3d>.model-workspace{height:560px;min-height:560px}.studio-workspace .mode-3d>.inspector{width:100%;height:auto}
 }
+
+/* Crash-recovery banner. Mirrors the desktop's autosave restore prompt. */
+.recovery-banner{display:flex;align-items:center;gap:.7rem;padding:.7rem 1rem;
+  background:#2c3a2a;border:1px solid #5d7a4f;border-radius:.5rem;color:#d8e8cc;
+  margin:0 0 .6rem;font-size:.92rem;flex-wrap:wrap}
+.recovery-banner strong{color:#eaf5e2}
+.recovery-actions{display:flex;gap:.45rem;margin-left:auto}
+.recovery-banner .button{padding:.35rem .8rem;font-size:.86rem}
+
+/* Snow lookup */
+.snow-lookup{display:flex;flex-direction:column;gap:.55rem;margin-top:.5rem;
+  padding-top:.7rem;border-top:1px solid rgba(255,255,255,.09)}
+.snow-fields{display:grid;grid-template-columns:2fr 1fr;gap:.5rem}
+.snow-result{display:flex;flex-direction:column;gap:.15rem;margin:0;padding:.55rem .7rem;
+  background:#2c3a2a;border:1px solid #5d7a4f;border-radius:.4rem;font-size:.88rem;color:#d8e8cc}
+.snow-result small{opacity:.75;font-size:.8rem}
+.snow-problem{display:flex;align-items:flex-start;gap:.45rem;margin:0;padding:.5rem .65rem;
+  background:#3d2b26;border:1px solid #8a5442;border-radius:.4rem;font-size:.86rem;color:#f0c9ba}
+.snow-manual{display:flex;justify-content:space-between;align-items:center;gap:.6rem;font-size:.84rem;flex-wrap:wrap}
+.snow-manual a{display:inline-flex;align-items:center;gap:.3rem;color:#9fc4e0}
+.link-button{background:none;border:0;padding:0;color:#9fc4e0;cursor:pointer;
+  text-decoration:underline;font-size:.84rem;font-family:inherit}
+.snow-paste{display:flex;flex-direction:column;gap:.4rem}
+.snow-paste textarea{width:100%;resize:vertical;font:inherit;font-size:.85rem;padding:.5rem;
+  border-radius:.4rem;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.22);color:inherit}
+
+/* Additional load layers */
+.load-layers{display:flex;flex-direction:column;gap:.6rem}
+.layer-tabs{display:flex;flex-wrap:wrap;gap:.35rem}
+.layer-tabs button{display:inline-flex;align-items:center;gap:.4rem;padding:.32rem .6rem;
+  border-radius:.4rem;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);
+  color:inherit;cursor:pointer;font:inherit;font-size:.85rem}
+.layer-tabs button.active{border-color:#8fae5e;background:rgba(143,174,94,.16)}
+.layer-tabs button i{width:.7rem;height:.7rem;border-radius:.18rem;display:inline-block}
+.layer-tabs button small{opacity:.6}
+.layer-editor{display:flex;flex-direction:column;gap:.5rem}
+.layer-row{display:flex;gap:.5rem;align-items:flex-end;flex-wrap:wrap}
+.layer-row .field.grow{flex:1 1 9rem}
+.layer-row .field.narrow{flex:0 0 7rem}
+.layer-row .field.color{flex:0 0 4rem}
+.layer-row .field.color input[type=color]{width:100%;height:2.1rem;padding:.1rem;
+  border-radius:.4rem;border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.22);cursor:pointer}
+.layer-actions{display:flex;gap:.4rem;flex-wrap:wrap}
+.button.danger{border-color:#8a5442;color:#f0c9ba}
+.button.danger:hover{background:rgba(138,84,66,.22)}
