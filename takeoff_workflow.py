@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 
 import catalogs
+import foundations
 import roof as roof_profile
 import selection
 from calculation_engine import InputValidationError
@@ -159,9 +160,15 @@ class Workflow(SteelGridApp):
         self._record("mezz_columns", groups, lambda: selection.compute_mezz_column_auto_assignments(groups, self.column_rows))
 
     def concrete_and_walls(self):
-        self.calculate_pad_footings()
-        self.calculate_mezz_pad_footings()
-        walls = self._calculate_tilt_wall_takeoff()
+        depth = self.footing_depth_var.get()
+        bearing = self.bearing_pressure_var.get()
+        self.last_footing_result = foundations.calculate_pad_footings(
+            self.last_column_result, depth, bearing)
+        self.last_mezz_footing_result = foundations.calculate_mezz_pad_footings(
+            self.last_mezz_result, depth, bearing)
+        walls = foundations.calculate_tilt_wall_takeoff(
+            self.model.x_spans, self.model.y_spans, self._build_roof_profile_data(),
+            self.metal_deck_thickness_var.get(), self.insulation_depth_var.get())
         # The original tilt takeoff measures the bounding rectangle, even where
         # the steel footprint has voids. Keep that convention explicit.
         walls["basis"] = "Original exterior-envelope takeoff; gross area, before openings."
