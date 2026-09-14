@@ -165,7 +165,7 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
         if not self._local_request():
             return
         path = urlsplit(self.path).path
-        if path not in {"/api/calculate", "/api/import", "/api/report"}:
+        if path not in {"/api/calculate", "/api/import", "/api/report", "/api/snow-lookup"}:
             self._json_response(404, {"error": "Unknown API endpoint."})
             return
         if self.headers.get("Transfer-Encoding"):
@@ -207,6 +207,20 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
                     self.wfile.write(report)
                 except (BrokenPipeError, ConnectionResetError):
                     pass
+                return
+            if path == "/api/snow-lookup":
+                import snow_lookup
+                # Two upstream hops (geocode, then ASCE GIS) can outlast the
+                # default socket timeout; widen it for this request only.
+                self.connection.settimeout(40)
+                # No calculation_lock: this is third-party network I/O and must
+                # not block recalculation. It never touches project_result.
+                if project.get("paste"):
+                    self._json_response(200, snow_lookup.parse_pasted(project.get("paste")))
+                else:
+                    self._json_response(200, snow_lookup.lookup(
+                        project.get("city", ""), project.get("state", ""),
+                        project.get("snow_code", "ASCE 7-16")))
                 return
             with self.server.calculation_lock:
                 result = self.server.adapter.calculate_project(project)
