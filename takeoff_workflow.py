@@ -9,6 +9,7 @@ from functools import lru_cache
 import math
 from pathlib import Path
 
+import catalogs
 from calculation_engine import InputValidationError
 from grid_gui import GridModel, SteelGridApp
 
@@ -26,14 +27,13 @@ class Value:
 
 @lru_cache(maxsize=1)
 def catalog_rows():
-    # The original Excel readers/selection data, cached between live updates.
-    context = object.__new__(SteelGridApp)
+    # The original Excel readers, now in catalogs.py; cached between live updates.
     root = Path(__file__).resolve().parent
-    joists = context._parse_joist_catalog_excel(root / "Joist Table 2.xlsx")
-    lh = context._parse_joist_catalog_excel(root / "LH Joist Table.xlsx")
-    girders = context._parse_girder_catalog_excel(root / "Expanded Vulcraft Joist Girder Catalog.xlsx")
-    columns = context._parse_column_catalog_excel(root / "Column Table.xlsx")
-    return joists, lh, context._build_girder_catalog_index(girders), columns
+    joists = catalogs.parse_joist_catalog_excel(root / "Joist Table 2.xlsx")
+    lh = catalogs.parse_joist_catalog_excel(root / "LH Joist Table.xlsx")
+    girders = catalogs.parse_girder_catalog_excel(root / "Expanded Vulcraft Joist Girder Catalog.xlsx")
+    columns = catalogs.parse_column_catalog_excel(root / "Column Table.xlsx")
+    return joists, lh, catalogs.build_girder_catalog_index(girders), columns
 
 
 class Workflow(SteelGridApp):
