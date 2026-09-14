@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 
 import catalogs
+import roof as roof_profile
 import selection
 from calculation_engine import InputValidationError
 from grid_gui import GridModel, SteelGridApp
@@ -75,7 +76,22 @@ class Workflow(SteelGridApp):
         self.footing_text = text
 
     def _build_roof_profile_data(self):
-        return self.profile if self.profile is not None else super()._build_roof_profile_data()
+        if self.profile is not None:
+            return self.profile
+        return roof_profile.build_roof_profile_data(
+            y_spans=self.model.y_spans,
+            roof_type=self.roof_type_var.get(),
+            single_slope_direction=self.single_slope_direction_var.get(),
+            break_clear_height=self.break_clear_height_var.get(),
+            clear_height_ft=self.clear_height_var.get(),
+            joist_seat_depth_in=self.joist_seat_depth_var.get(),
+            speed_bay_rows=self.speed_bay_rows,
+            joist_result=self.last_joist_result,
+            joist_selection_by_group=self.joist_selection_by_group,
+        )
+
+    def _get_allowed_girder_depth_by_line_in(self):
+        return roof_profile.allowed_girder_depth_by_line_in(self._build_roof_profile_data())
 
     def _record(self, category, groups, calculate):
         self.groups[category] = groups
@@ -120,7 +136,12 @@ class Workflow(SteelGridApp):
         self._record("mezz_joists", groups, lambda: selection.compute_joist_auto_assignments(groups, self.mezz_joist_catalog_rows, prefer_lightest_over_tier=True))
 
     def set_profile(self, heights):
-        profile = deepcopy(super()._build_roof_profile_data())
+        # Build a fresh base profile, bypassing any cached self.profile.
+        saved, self.profile = self.profile, None
+        try:
+            profile = deepcopy(self._build_roof_profile_data())
+        finally:
+            self.profile = saved
         ys = self.model.y_lines
         profile.update(line_toj_elevations_ft=heights, line_roof_heights=heights,
                        bay_slopes_ft_per_ft=[(heights[i + 1] - heights[i]) / span for i, span in enumerate(self.model.y_spans)])
