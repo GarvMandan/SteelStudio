@@ -10,6 +10,7 @@ import math
 from pathlib import Path
 
 import catalogs
+import selection
 from calculation_engine import InputValidationError
 from grid_gui import GridModel, SteelGridApp
 
@@ -84,15 +85,15 @@ class Workflow(SteelGridApp):
         try:
             response = calculate()
             valid = {}
-            for key, selection in response[0].items():
-                weight = selection.get("weight_plf")
+            for key, chosen in response[0].items():
+                weight = chosen.get("weight_plf")
                 if not isinstance(weight, (int, float)) or not math.isfinite(weight) or weight <= 0:
                     self.notes.append(
                         f"{category.replace('_', ' ').title()}: automatic catalog estimate returned an invalid weight "
-                        f"for {selection.get('designation', key)}; left unassigned. Choose a section for this demand group."
+                        f"for {chosen.get('designation', key)}; left unassigned. Choose a section for this demand group."
                     )
                 else:
-                    valid[key] = selection
+                    valid[key] = chosen
             self.auto[category] = {
                 key: dict(value, source="Original automatic catalog selection", auto_selected=True)
                 for key, value in valid.items()
@@ -113,10 +114,10 @@ class Workflow(SteelGridApp):
         else:
             self.joist_rows, self.mezz_joist_catalog_rows, self.girder_index, self.column_rows = [], [], {}, []
         groups = self.last_joist_result["joist_demand_groups"]
-        self._record("joists", groups, lambda: self._compute_main_joist_assignments_with_lh_fallback(groups, self.joist_rows))
+        self._record("joists", groups, lambda: selection.compute_main_joist_assignments_with_lh_fallback(groups, self.joist_rows))
         self.joist_selection_by_group = {**self.auto["joists"], **self.project["assignments"].get("joists", {})}
         groups = self.last_mezz_result["mezzanine_joist_demand_groups"]
-        self._record("mezz_joists", groups, lambda: self._compute_joist_auto_assignments(groups, self.mezz_joist_catalog_rows, prefer_lightest_over_tier=True))
+        self._record("mezz_joists", groups, lambda: selection.compute_joist_auto_assignments(groups, self.mezz_joist_catalog_rows, prefer_lightest_over_tier=True))
 
     def set_profile(self, heights):
         profile = deepcopy(super()._build_roof_profile_data())
@@ -128,13 +129,13 @@ class Workflow(SteelGridApp):
 
     def select_remaining(self):
         groups = self._build_girder_demand_groups(self.last_girder_result["girder_calculations"])
-        self._record("girders", groups, lambda: self._compute_girder_auto_assignments(groups, self.girder_index))
+        self._record("girders", groups, lambda: selection.compute_girder_auto_assignments(groups, self.girder_index))
         groups = self._build_column_demand_groups(self.last_column_result["column_calculations"])
-        self._record("columns", groups, lambda: self._compute_column_auto_assignments(groups, self.column_rows, self.project["clear_height_ft"]))
+        self._record("columns", groups, lambda: selection.compute_column_auto_assignments(groups, self.column_rows, self.project["clear_height_ft"]))
         groups = self._build_mezz_girder_groups_for_assignment()
-        self._record("mezz_girders", groups, lambda: self._compute_girder_auto_assignments(groups, self.girder_index))
+        self._record("mezz_girders", groups, lambda: selection.compute_girder_auto_assignments(groups, self.girder_index))
         groups = self.last_mezz_result["mezzanine_column_demand_groups"]
-        self._record("mezz_columns", groups, lambda: self._compute_mezz_column_auto_assignments(groups, self.column_rows))
+        self._record("mezz_columns", groups, lambda: selection.compute_mezz_column_auto_assignments(groups, self.column_rows))
 
     def concrete_and_walls(self):
         self.calculate_pad_footings()
