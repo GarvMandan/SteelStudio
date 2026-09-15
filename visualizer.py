@@ -315,7 +315,11 @@ def create_server(port=0, initial_project=None, static_dir=STATIC_DIR, adapter=N
     result = adapter.calculate_project(project)
     json.dumps(result, allow_nan=False)
     host = host if host is not None else os.environ.get("HOST", "127.0.0.1")
-    public_host = public_host if public_host is not None else os.environ.get("PUBLIC_HOST", "")
+    if public_host is None:
+        # PUBLIC_HOST is the explicit override; RENDER_EXTERNAL_HOSTNAME is
+        # set automatically by Render on every service, so a Render deploy
+        # needs no extra config for this to resolve correctly.
+        public_host = os.environ.get("PUBLIC_HOST") or os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
     return SteelStudioServer(port, root, adapter, result, host=host, public_host=public_host)
 
 
