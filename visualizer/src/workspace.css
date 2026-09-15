@@ -325,3 +325,15 @@
 .preview-caption span{opacity:.68;font-size:.82rem}
 .setup-actions{display:flex;justify-content:flex-end;gap:.5rem}
 button.brand{background:none;border:0;cursor:pointer;font:inherit;color:inherit;text-align:left}
+
+/* Concrete quantity summary */
+.concrete-summary{margin-top:.9rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.1)}
+.concrete-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.45rem}
+.concrete-rows button{display:flex;flex-direction:column;gap:.15rem;padding:.5rem .6rem;text-align:left;
+  border:1px solid rgba(255,255,255,.12);border-radius:.45rem;background:rgba(255,255,255,.03);
+  color:inherit;cursor:pointer;font:inherit}
+.concrete-rows button:hover{border-color:rgba(168,164,156,.6)}
+.concrete-rows span{font-size:.78rem;opacity:.7}
+.concrete-rows strong{display:flex;flex-direction:column;font-size:1.02rem;font-weight:600}
+.concrete-rows small{font-size:.74rem;opacity:.62;font-weight:400}
+.concrete-rows .concrete-total{border-color:rgba(168,164,156,.45);background:rgba(168,164,156,.1)}

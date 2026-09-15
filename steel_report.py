@@ -442,13 +442,43 @@ class SteelReport:
         rows.append(['TOTAL',str(len(pads)),'','',number(volume,3),number(volume*1.1,3)])
         self.table(['Location','Pads','Pad size (ft)','Depth (ft)','Net concrete (CY)','With waste (CY)'],rows,[190,50,130,90,126,126],continuation='Pad footing schedule - continued')
         if self.y<280:self.page('Gross wall area')
-        self.section('Exterior wall envelope')
+        self.section('Tilt wall panels')
+        tw=tf.get('tilt_wall_concrete') or {}
+        panels={p['key']:p for p in tw.get('panels',[])}
         rows=[]
         for side in ['north','south','east','west']:
             wall=tf['walls'][f'{side}_wall']
-            rows.append([side.title(),number(wall['length_ft']),number(wall['area_sf'],0)])
-        rows.append(['TOTAL','',number(tf['walls']['summary']['total_area_sf'],0)])
-        self.table(['Wall','Length (ft)','Gross area (sf)'],rows,[240,236,236],continuation='Wall area - continued')
+            panel=panels.get(f'{side}_wall',{})
+            rows.append([side.title(),number(wall['length_ft']),number(panel.get('governing_height_ft',0)),
+                         number(panel.get('thickness_in',0),2),number(wall['area_sf'],0),
+                         number(panel.get('volume_cy',0),2)])
+        summary=tw.get('summary',{})
+        rows.append(['TOTAL','','',f"{number(summary.get('max_thickness_in',0),2)} max",
+                     number(tf['walls']['summary']['total_area_sf'],0),
+                     number(summary.get('total_cy',0),2)])
+        self.table(['Wall','Length (ft)','Height (ft)','Thickness (in)','Gross area (sf)','Concrete (CY)'],
+                   rows,[110,100,100,120,140,142],continuation='Tilt wall panels - continued')
+        if tw.get('method'):
+            self.y -= self.paragraph(f"Panel thickness: {tw['method']}. {tw.get('basis','')}",
+                                     MARGIN, self.y, CONTENT_W, 8)+8
+        slab=tf.get('slab')
+        if slab:
+            if self.y<200:self.page('Slab on grade')
+            self.section('Slab on grade')
+            self.table(['Element','Thickness (in)','Area (sf)','Net concrete (CY)','With waste (CY)'],
+                       [['Slab on grade',number(slab['thickness_in'],2),number(slab['area_sf'],0),
+                         number(slab['volume_cy'],2),number(slab['volume_cy_with_waste'],2)]],
+                       [180,120,120,148,144])
+            self.y -= self.paragraph(slab.get('basis',''), MARGIN, self.y, CONTENT_W, 8)+8
+        cs=tf.get('concrete_summary')
+        if cs:
+            if self.y<190:self.page('Concrete summary')
+            self.section('Total concrete')
+            self.table(['Scope','Concrete (CY)'],
+                       [['Tilt wall panels',number(cs['tilt_wall_cy'],2)],
+                        ['Slab on grade',number(cs['slab_cy'],2)],
+                        ['Spread footings',number(cs['footing_cy'],2)],
+                        ['TOTAL',number(cs['total_cy'],2)]],[380,332])
         if self.y<90:self.page('Concrete and wall basis')
         self.paragraph(f'Soil bearing input: {number(self.project["bearing_capacity_psf"],0)} psf. Pad sizes round up to quarter-foot increments. Wall area follows the original rectangular exterior envelope, dock heights and stepped wall elevations; openings and footprint cutouts are not deducted.',MARGIN,self.y,CONTENT_W,8.5)
 

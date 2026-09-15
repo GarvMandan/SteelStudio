@@ -164,12 +164,16 @@ def build_solids(bays, xs, ys, walls_concrete, slab, footings, mezz_footings=Non
     Each solid is an axis-aligned box: `center` [x, y, z] in feet with Z up,
     and `size` [x, y, z] in feet. The viewer renders these as solids, unlike
     steel members which are lines between two endpoints.
+
+    Elevation datum, matching the drawing convention: top of slab is grade,
+    z = 0 (100'-0"). The slab occupies -t to 0, so top of footing sits at
+    the underside of the slab, and each footing extends down from there.
     """
     solids = []
+    slab_t = float((slab or {}).get("thickness_in") or 0.0) / 12.0
 
-    # Slab on grade: one box over the active footprint, top at grade (z=0).
-    thickness_ft = float((slab or {}).get("thickness_in") or 0.0) / 12.0
-    if thickness_ft > 0 and bays:
+    # Slab on grade: top face at grade, thickness downward.
+    if slab_t > 0 and bays:
         for bay in bays:
             if not isinstance(bay, dict) or not bay.get("active", True):
                 continue
@@ -179,17 +183,21 @@ def build_solids(bays, xs, ys, walls_concrete, slab, footings, mezz_footings=Non
                 continue
             solids.append({
                 "id": f"SLAB-{bay.get('id', '')}",
-                "type": "slab", "discipline": "concrete",
+                "type": "slab", "discipline": "concrete", "level": "roof",
                 "label": f"Slab {bay.get('id', '')}",
                 "center": [round(float(bay.get("x_ft", 0.0)) + w / 2, 4),
                            round(float(bay.get("y_ft", 0.0)) + l / 2, 4),
-                           round(-thickness_ft / 2, 4)],
-                "size": [round(w, 4), round(l, 4), round(thickness_ft, 4)],
+                           round(-slab_t / 2, 4)],
+                "size": [round(w, 4), round(l, 4), round(slab_t, 4)],
                 "thickness_in": (slab or {}).get("thickness_in"),
-                "description": "Slab on grade. Thickness is a project input.",
+                "top_elevation_ft": 0.0,
+                "description": (
+                    f"Slab on grade, {(slab or {}).get('thickness_in')} in thick. "
+                    "Top of slab is the 100'-0\" datum."
+                ),
             })
 
-    # Spread footings: one box per column, top at the underside of the slab.
+    # Spread footings: top of footing at the underside of the slab.
     for source, level in ((footings, "roof"), (mezz_footings, "mezzanine")):
         for row in ((source or {}).get("column_footings") or []):
             size = float(row.get("footing_size_ft") or 0.0)
@@ -197,19 +205,25 @@ def build_solids(bays, xs, ys, walls_concrete, slab, footings, mezz_footings=Non
             position = (column_positions or {}).get(str(row.get("column_id", "")))
             if size <= 0 or depth <= 0 or not position:
                 continue
+            top = -slab_t
             solids.append({
                 "id": f"FTG-{row.get('column_id', '')}",
                 "type": "footing", "discipline": "concrete", "level": level,
                 "label": f"Footing {row.get('grid', row.get('column_id', ''))}",
                 "center": [round(position[0], 4), round(position[1], 4),
-                           round(-thickness_ft - depth / 2, 4)],
+                           round(top - depth / 2, 4)],
                 "size": [round(size, 4), round(size, 4), round(depth, 4)],
                 "volume_cy": row.get("footing_volume_cy"),
                 "required_capacity_kips": row.get("required_capacity_kips"),
-                "description": f"Spread footing {size:g} ft square x {depth:g} ft deep.",
+                "top_elevation_ft": round(top, 4),
+                "description": (
+                    f"Spread footing {size:g} ft square x {depth:g} ft deep. "
+                    f"Top of footing at {top:+.2f} ft, the underside of the slab."
+                ),
             })
 
-    # Tilt wall panels: one box per elevation, at its governing thickness.
+    # Tilt wall panels: one box per elevation, at its governing thickness,
+    # sitting just outside the building line so the steel stays visible.
     width_ft = float(xs[-1]) if xs else 0.0
     length_ft = float(ys[-1]) if ys else 0.0
     for panel in ((walls_concrete or {}).get("panels") or []):
@@ -229,17 +243,19 @@ def build_solids(bays, xs, ys, walls_concrete, slab, footings, mezz_footings=Non
             size = [t, length_ft]
         solids.append({
             "id": f"TW-{panel.get('wall', '')}",
-            "type": "tilt_wall", "discipline": "concrete",
+            "type": "tilt_wall", "discipline": "concrete", "level": "roof",
             "label": f"{panel.get('wall', '')} tilt panel",
             "center": [round(centre[0], 4), round(centre[1], 4), round(base + height / 2, 4)],
             "size": [round(size[0], 4), round(size[1], 4), round(height, 4)],
             "thickness_in": panel.get("thickness_in"),
             "area_sf": panel.get("area_sf"),
             "volume_cy": panel.get("volume_cy"),
+            "height_ft": round(height, 3),
             "description": (
                 f"Tilt-up panel {panel.get('thickness_in')} in thick, "
-                f"{panel.get('governing_height_ft')} ft tall. Thickness from H/50, "
-                f"minimum {MIN_THICKNESS_IN} in."
+                f"{panel.get('governing_height_ft')} ft tall, {panel.get('area_sf')} sf, "
+                f"{panel.get('volume_cy')} CY. Thickness from H/50, minimum "
+                f"{MIN_THICKNESS_IN} in."
             ),
         })
     return solids

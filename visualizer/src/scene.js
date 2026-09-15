@@ -147,7 +147,8 @@ export class SteelScene {
     // are built from their centre and size rather than memberGeometry().
     for(const solid of data.concrete_solids||[]){
       const geometry=new THREE.BoxGeometry(solid.size[0],solid.size[2],solid.size[1]);
-      const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:CONCRETE_COLORS[solid.type]||'#9a9e9f',metalness:.05,roughness:.92}));
+      const wall=solid.type==='tilt_wall';
+      const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:CONCRETE_COLORS[solid.type]||'#9a9e9f',metalness:.05,roughness:.92,transparent:wall,opacity:wall?.5:1,depthWrite:!wall,side:THREE.DoubleSide}));
       mesh.position.copy(vec(solid.center));
       mesh.userData.member=solid;mesh.userData.concrete=true;
       this.concreteGroup.add(mesh);this.concreteMeshes.push(mesh);
@@ -156,9 +157,10 @@ export class SteelScene {
     const lowest=Math.min(0,...(data.concrete_solids||[]).map(s=>s.center[2]-s.size[2]/2));
     this.bounds=new THREE.Box3(new THREE.Vector3(-2,lowest,-2),new THREE.Vector3(w+2,Math.max(...data.members.map(m=>Math.max(m.start[2],m.end[2])),24),l+2));
     if(this.floor){this.scene.remove(this.floor);this.floor.geometry.dispose();this.floor.material.dispose();}
-    this.floor=new THREE.Mesh(new THREE.PlaneGeometry(w+28,l+28),new THREE.MeshBasicMaterial({color:'#dce3e9'}));this.floor.rotation.x=-Math.PI/2;this.floor.position.set(w/2,-.17,l/2);this.scene.add(this.floor);
+    const deepest=Math.min(-.17,...(data.concrete_solids||[]).map(s=>s.center[2]-s.size[2]/2));
+    this.floor=new THREE.Mesh(new THREE.PlaneGeometry(w+28,l+28),new THREE.MeshBasicMaterial({color:'#dce3e9'}));this.floor.rotation.x=-Math.PI/2;this.floor.position.set(w/2,deepest-.35,l/2);this.scene.add(this.floor);
     if(this.gridHelper){this.scene.remove(this.gridHelper);this.gridHelper.geometry.dispose();this.gridHelper.material.dispose();}
-    const size=Math.max(w,l)+160;this.gridHelper=new THREE.GridHelper(size,Math.ceil(size/5),0xb5c1ce,0xcbd4dc);this.gridHelper.position.set(w/2,-.2,l/2);this.scene.add(this.gridHelper);
+    const size=Math.max(w,l)+160;this.gridHelper=new THREE.GridHelper(size,Math.ceil(size/5),0xb5c1ce,0xcbd4dc);this.gridHelper.position.set(w/2,deepest-.4,l/2);this.scene.add(this.gridHelper);
     for(let i=0;i<x.length;i++){this.line([new THREE.Vector3(x[i],0,-5),new THREE.Vector3(x[i],0,l+3)]);this.label(String(i+1),new THREE.Vector3(x[i],0,-10),'axis-label');}
     for(let i=0;i<y.length;i++){this.line([new THREE.Vector3(-5,0,y[i]),new THREE.Vector3(w+3,0,y[i])]);this.label(this.letter(i),new THREE.Vector3(-10,0,y[i]),'axis-label');}
     for(let i=0;i<x.length-1;i++){this.line([new THREE.Vector3(x[i],0,-6),new THREE.Vector3(x[i+1],0,-6)]);this.label(ft(x[i+1]-x[i]),new THREE.Vector3((x[i]+x[i+1])/2,0,-6),'dimension-label',()=>this.callbacks.dimension('x',i));}
