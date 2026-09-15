@@ -121,10 +121,24 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
                 self._json_response(200, result, head)
             elif path == "/api/catalog":
                 self._json_response(200, self.server.adapter.catalogs(), head)
+            elif path == "/api/workspace":
+                import workspace_store
+                self._json_response(200, {"projects": workspace_store.list_projects()}, head)
+            elif path.startswith("/api/workspace/"):
+                import workspace_store
+                parts = [p for p in path[len("/api/workspace/"):].split("/") if p]
+                if len(parts) == 1:
+                    self._json_response(200, workspace_store.get_project(parts[0]), head)
+                elif len(parts) == 3 and parts[1] == "buildings":
+                    self._json_response(200, workspace_store.get_building(parts[0], parts[2]), head)
+                else:
+                    self._json_response(404, {"error": "Unknown workspace path."}, head)
             elif path.startswith("/api/"):
                 self._json_response(404, {"error": "Unknown API endpoint."}, head)
             else:
                 self._serve_static(path, head)
+        except self.server.adapter.InputValidationError as exc:
+            self._json_response(404, {"error": str(exc)}, head)
         except (ValueError, TypeError, OSError) as exc:
             self.log_error("Request failed: %s", exc)
             self._json_response(500, {"error": "The requested resource could not be loaded."}, head)
@@ -165,7 +179,8 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
         if not self._local_request():
             return
         path = urlsplit(self.path).path
-        if path not in {"/api/calculate", "/api/import", "/api/report", "/api/snow-lookup"}:
+        if not (path in {"/api/calculate", "/api/import", "/api/report", "/api/snow-lookup"}
+                or path.startswith("/api/workspace")):
             self._json_response(404, {"error": "Unknown API endpoint."})
             return
         if self.headers.get("Transfer-Encoding"):
@@ -207,6 +222,34 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
                     self.wfile.write(report)
                 except (BrokenPipeError, ConnectionResetError):
                     pass
+                return
+            if path.startswith("/api/workspace"):
+                import workspace_store
+                parts = [p for p in path[len("/api/workspace"):].split("/") if p]
+                action = str(project.get("action") or "")
+                if not parts:
+                    if action == "create":
+                        self._json_response(200, workspace_store.create_project(project))
+                    else:
+                        raise ValueError("Unknown workspace action.")
+                elif len(parts) == 1:
+                    if action == "update":
+                        self._json_response(200, workspace_store.update_project(parts[0], project))
+                    elif action == "delete":
+                        self._json_response(200, workspace_store.delete_project(parts[0]))
+                    else:
+                        raise ValueError("Unknown workspace action.")
+                elif len(parts) == 2 and parts[1] == "buildings":
+                    self._json_response(200, workspace_store.create_building(parts[0], project))
+                elif len(parts) == 3 and parts[1] == "buildings":
+                    if action == "delete":
+                        self._json_response(200, workspace_store.delete_building(parts[0], parts[2]))
+                    elif action == "duplicate":
+                        self._json_response(200, workspace_store.duplicate_building(parts[0], parts[2], project.get("name")))
+                    else:
+                        self._json_response(200, workspace_store.save_building(parts[0], parts[2], project))
+                else:
+                    raise ValueError("Unknown workspace path.")
                 return
             if path == "/api/snow-lookup":
                 import snow_lookup

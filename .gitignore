@@ -22,3 +22,6 @@ visualizer/dist/*.map
 /output/
 .steel-studio-*.json
 Structural_Steel_Report_*.pdf
+
+# Estimator workspace (projects and buildings on disk)
+/projects/
