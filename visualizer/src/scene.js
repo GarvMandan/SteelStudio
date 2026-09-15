@@ -4,6 +4,8 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const COLORS = { joist: '#52bcb5', girder: '#6385bd', column: '#ca946b' };
+// Concrete reads as a distinct material family from the steel palette.
+const CONCRETE_COLORS = { slab: '#9a9e9f', footing: '#8b8f92', tilt_wall: '#a8a49c' };
 // Plan coordinates are X east, Y south, Z elevation. Three.js uses Y up.
 // Positive world Z must stay south so the north-up view matches the layout.
 export const modelToWorld = p => new THREE.Vector3(p[0], p[2], p[1]);
@@ -104,7 +106,7 @@ export class SteelScene {
     }finally{studio?.dispose();host.remove();}
   }
   constructor(container, callbacks) {
-    this.container=container; this.callbacks=callbacks; this.meshes=[]; this.selected=null; this.settings={dimensions:true,grid:true,walls:true,joist:true,girder:true,column:true,roof:true,mezzanine:true,color:'type',cut:100};
+    this.container=container; this.callbacks=callbacks; this.meshes=[]; this.selected=null; this.settings={dimensions:true,grid:true,walls:true,joist:true,girder:true,column:true,roof:true,mezzanine:true,slab:true,footing:true,tilt_wall:true,color:'type',cut:100};
     this.scene=new THREE.Scene(); this.scene.background=new THREE.Color('#e5eaf0');
     this.camera=new THREE.PerspectiveCamera(38,1,.05,20000);
     this.renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
@@ -117,8 +119,8 @@ export class SteelScene {
     this.scene.add(new THREE.HemisphereLight(0xffffff,0x60738c,2.5));
     const sun=new THREE.DirectionalLight(0xffffff,3.2); sun.position.set(80,160,60); this.scene.add(sun);
     const fill=new THREE.DirectionalLight(0x9fcae2,2); fill.position.set(-100,40,-40); this.scene.add(fill);
-    this.group=new THREE.Group(); this.annotation=new THREE.Group(); this.dimensionGroup=new THREE.Group(); this.supportGroup=new THREE.Group();
-    this.scene.add(this.group,this.annotation,this.dimensionGroup,this.supportGroup);
+    this.group=new THREE.Group(); this.annotation=new THREE.Group(); this.dimensionGroup=new THREE.Group(); this.supportGroup=new THREE.Group(); this.concreteGroup=new THREE.Group();
+    this.scene.add(this.group,this.annotation,this.dimensionGroup,this.supportGroup,this.concreteGroup);
     this.ray=new THREE.Raycaster(); this.mouse=new THREE.Vector2();
     this.clip=new THREE.Plane(new THREE.Vector3(-1,0,0),1e8);
     this.resizeObserver=new ResizeObserver(()=>this.resize()); this.resizeObserver.observe(container);
@@ -130,6 +132,8 @@ export class SteelScene {
     this.renderer.domElement.addEventListener('pointerleave',()=>callbacks.hover(null));
     this.animate=()=>{if(this.disposed)return;this.frame=requestAnimationFrame(this.animate);if(this.tween){const t=Math.min(1,(performance.now()-this.tween.time)/500),e=1-(1-t)**3;this.camera.position.lerpVectors(this.tween.from,this.tween.to,e);this.controls.target.lerpVectors(this.tween.targetFrom,this.tween.targetTo,e);if(t===1)this.tween=null;}this.controls.update();this.renderer.render(this.scene,this.camera);this.labels.render(this.scene,this.camera);};
     this.animate(); this.resize();
+    // Exposed for automated checks of layer visibility.
+    if(typeof window!=='undefined')window.__steelScene=this;
   }
   resize(){const {clientWidth:w,clientHeight:h}=this.container;if(!w||!h)return;const widthChanged=this.previousWidth&&Math.abs(w-this.previousWidth)>10;this.previousWidth=w;this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.renderer.setSize(w,h);this.labels.setSize(w,h);if(widthChanged&&this.bounds)this.view(this.lastView||'3d',false);}
   clear(group){while(group.children.length){const obj=group.children[0];obj.traverse(n=>{n.geometry?.dispose();if(n.material){for(const m of Array.isArray(n.material)?n.material:[n.material])m.dispose();}if(n.element)n.element.remove();});group.remove(obj);}}
@@ -138,8 +142,19 @@ export class SteelScene {
   setModel(data){
     const first=!this.data;this.data=data;this.clear(this.group);this.clear(this.dimensionGroup);this.clear(this.supportGroup);this.clear(this.annotation);this.meshes=[];
     for(const member of data.members){const mesh=new THREE.Mesh(memberGeometry(member),new THREE.MeshStandardMaterial({color:COLORS[member.type],metalness:.45,roughness:.44}));mesh.userData.member=member;this.group.add(mesh);this.meshes.push(mesh);}
+    this.clear(this.concreteGroup);this.concreteMeshes=[];
+    // Concrete elements are solids, not lines between two endpoints, so they
+    // are built from their centre and size rather than memberGeometry().
+    for(const solid of data.concrete_solids||[]){
+      const geometry=new THREE.BoxGeometry(solid.size[0],solid.size[2],solid.size[1]);
+      const mesh=new THREE.Mesh(geometry,new THREE.MeshStandardMaterial({color:CONCRETE_COLORS[solid.type]||'#9a9e9f',metalness:.05,roughness:.92}));
+      mesh.position.copy(vec(solid.center));
+      mesh.userData.member=solid;mesh.userData.concrete=true;
+      this.concreteGroup.add(mesh);this.concreteMeshes.push(mesh);
+    }
     const grid=data.grid,x=grid.x_lines_ft||grid.x_lines,y=grid.y_lines_ft||grid.y_lines,w=x.at(-1),l=y.at(-1);
-    this.bounds=new THREE.Box3(new THREE.Vector3(-2,0,-2),new THREE.Vector3(w+2,Math.max(...data.members.map(m=>Math.max(m.start[2],m.end[2])),24),l+2));
+    const lowest=Math.min(0,...(data.concrete_solids||[]).map(s=>s.center[2]-s.size[2]/2));
+    this.bounds=new THREE.Box3(new THREE.Vector3(-2,lowest,-2),new THREE.Vector3(w+2,Math.max(...data.members.map(m=>Math.max(m.start[2],m.end[2])),24),l+2));
     if(this.floor){this.scene.remove(this.floor);this.floor.geometry.dispose();this.floor.material.dispose();}
     this.floor=new THREE.Mesh(new THREE.PlaneGeometry(w+28,l+28),new THREE.MeshBasicMaterial({color:'#dce3e9'}));this.floor.rotation.x=-Math.PI/2;this.floor.position.set(w/2,-.17,l/2);this.scene.add(this.floor);
     if(this.gridHelper){this.scene.remove(this.gridHelper);this.gridHelper.geometry.dispose();this.gridHelper.material.dispose();}
@@ -154,11 +169,16 @@ export class SteelScene {
     this.setSettings(this.settings);this.select(this.selected);if(first)this.view('3d',false);
   }
   letter(i){let s='';for(i++;i;i=Math.floor((i-1)/26))s=String.fromCharCode(65+(i-1)%26)+s;return s;}
-  pick(e){const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);return this.ray.intersectObjects(this.meshes.filter(m=>m.visible)).find(h=>this.settings.cut>=100||h.point.x<=this.clip.constant);}
+  pick(e){const r=this.renderer.domElement.getBoundingClientRect();this.mouse.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.mouse,this.camera);return this.ray.intersectObjects([...this.meshes,...(this.concreteMeshes||[])].filter(m=>m.visible)).find(h=>this.settings.cut>=100||h.point.x<=this.clip.constant);}
   setSettings(settings){this.settings={...this.settings,...settings};if(this.gridHelper)this.gridHelper.visible=this.settings.grid;this.dimensionGroup.visible=this.settings.dimensions;this.supportGroup.visible=this.settings.walls;this.clip.constant=(this.data?.grid.width_ft||this.bounds?.max.x||100)*this.settings.cut/100;
-    for(const mesh of this.meshes){const m=mesh.userData.member;mesh.visible=this.settings[m.type]&&this.settings[m.level]!==false&&(!this.isolated||m.id===this.selected);mesh.material.clippingPlanes=this.settings.cut<100?[this.clip]:[];mesh.material.needsUpdate=true;this.paint(mesh);}}
+    for(const mesh of this.meshes){const m=mesh.userData.member;mesh.visible=this.settings[m.type]&&this.settings[m.level]!==false&&(!this.isolated||m.id===this.selected);mesh.material.clippingPlanes=this.settings.cut<100?[this.clip]:[];mesh.material.needsUpdate=true;this.paint(mesh);}
+    for(const mesh of this.concreteMeshes||[]){const m=mesh.userData.member;mesh.visible=this.settings[m.type]!==false&&(!this.isolated||m.id===this.selected);mesh.material.clippingPlanes=this.settings.cut<100?[this.clip]:[];mesh.material.needsUpdate=true;this.paintConcrete(mesh);}}
+  paintConcrete(mesh){const m=mesh.userData.member,selected=m.id===this.selected;mesh.material.color.set(selected?'#b4d943':CONCRETE_COLORS[m.type]||'#9a9e9f');mesh.material.emissive.set(selected?'#4e6710':'#000000');mesh.material.emissiveIntensity=selected?.3:0;}
   paint(mesh){const m=mesh.userData.member,selected=m.id===this.selected;mesh.material.color.set(selected?'#b4d943':this.settings.color==='steel'?'#8396a5':COLORS[m.type]);mesh.material.emissive.set(selected?'#4e6710':'#000000');mesh.material.emissiveIntensity=selected?.32:0;}
-  select(id){this.selected=id;this.clear(this.annotation);this.meshes.forEach(m=>this.paint(m));if(this.isolated)this.setSettings({});const member=this.data?.members.find(m=>m.id===id);if(member){const a=vec(member.start),b=vec(member.end);this.line([a,b],this.annotation,'#678600');const el=document.createElement('div');el.className='selected-label';el.textContent=`${member.id} · ${ft(member.length_ft)}`;const object=new CSS2DObject(el);object.position.copy(a.clone().lerp(b,.5)).add(new THREE.Vector3(0,2,0));this.annotation.add(object);}}
+  select(id){this.selected=id;this.clear(this.annotation);this.meshes.forEach(m=>this.paint(m));(this.concreteMeshes||[]).forEach(m=>this.paintConcrete(m));if(this.isolated)this.setSettings({});
+    const solid=this.data?.concrete_solids?.find(s=>s.id===id);
+    if(solid){const el=document.createElement('div');el.className='selected-label';el.textContent=`${solid.label} · ${solid.thickness_in?solid.thickness_in+'″':''}`;const object=new CSS2DObject(el);object.position.copy(vec(solid.center)).add(new THREE.Vector3(0,solid.size[2]/2+1.5,0));this.annotation.add(object);return;}
+    const member=this.data?.members.find(m=>m.id===id);if(member){const a=vec(member.start),b=vec(member.end);this.line([a,b],this.annotation,'#678600');const el=document.createElement('div');el.className='selected-label';el.textContent=`${member.id} · ${ft(member.length_ft)}`;const object=new CSS2DObject(el);object.position.copy(a.clone().lerp(b,.5)).add(new THREE.Vector3(0,2,0));this.annotation.add(object);}}
   fly(to,target,animated=true){if(animated)this.tween={from:this.camera.position.clone(),to,targetFrom:this.controls.target.clone(),targetTo:target,time:performance.now()};else{this.tween=null;this.camera.position.copy(to);this.controls.target.copy(target);}}
   view(name,animated=true){
     if(!this.bounds)return;this.lastView=name;
@@ -176,7 +196,7 @@ export class SteelScene {
     this.fly(center.clone().addScaledVector(direction,distance*1.18),center,animated);
     this.controls.update();this.camera.updateMatrixWorld();
   }
-  focus(id=this.selected){const mesh=this.meshes.find(m=>m.userData.member.id===id);if(!mesh)return;const box=new THREE.Box3().setFromObject(mesh),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3()).length();const direction=this.camera.position.clone().sub(this.controls.target).normalize();this.fly(center.clone().add(direction.multiplyScalar(Math.max(size*1.6,10))),center);}
+  focus(id=this.selected){const mesh=[...this.meshes,...(this.concreteMeshes||[])].find(m=>m.userData.member.id===id);if(!mesh)return;const box=new THREE.Box3().setFromObject(mesh),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3()).length();const direction=this.camera.position.clone().sub(this.controls.target).normalize();this.fly(center.clone().add(direction.multiplyScalar(Math.max(size*1.6,10))),center);}
   isolate(value){this.isolated=value;this.setSettings({});}
   zoom(factor){const d=this.camera.position.clone().sub(this.controls.target).multiplyScalar(factor);this.fly(this.controls.target.clone().add(d),this.controls.target.clone());}
   measurePoint(hit){const m=hit.object.userData.member;const a=vec(m.start),b=vec(m.end);const point=a.distanceTo(hit.point)<b.distanceTo(hit.point)?a:b;if(!this.measureStart){this.measureStart=point;this.callbacks.measure('First endpoint selected. Click another member endpoint.');return;}this.clear(this.annotation);this.line([this.measureStart,point],this.annotation,'#8da92b');const el=document.createElement('div');el.className='selected-label';el.textContent=`${ft(this.measureStart.distanceTo(point))} · endpoint to endpoint`;const label=new CSS2DObject(el);label.position.copy(point.clone().lerp(this.measureStart,.5));this.annotation.add(label);this.callbacks.measure(`Measured ${ft(this.measureStart.distanceTo(point))} between endpoints.`);this.measureStart=null;}

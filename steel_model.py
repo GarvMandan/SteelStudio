@@ -39,6 +39,7 @@ def defaults():
         "metal_deck_thickness_in": 1.5, "insulation_depth_in": 3.0,
         "single_slope_direction": "North", "joist_seat_depth_in": 2.5,
         "location_city": "", "location_state": "",
+        "slab_thickness_in": 6.0, "column_safety_factor": 1.18,
         "load_inputs_psf": {"dead_load_psf": 20.0, "live_load_psf": 20.0,
                             "snow_load_psf": 30.0, "snow_code": "ASCE 7-16",
                             "reduced_snow_load_psf_manual": 0.0,
@@ -185,6 +186,10 @@ def normalize_project(project):
     active = all_bays - inactive
     if not active:
         raise InputValidationError("At least one bay must remain active.")
+    p["slab_thickness_in"] = _number(p.get("slab_thickness_in", base["slab_thickness_in"]),
+                                    "Slab thickness", 0.5, 36)
+    p["column_safety_factor"] = _number(p.get("column_safety_factor", base["column_safety_factor"]),
+                                        "Column safety factor", 1.0, 3)
     for key in ("location_city", "location_state"):
         value = p.get(key, "")
         if not isinstance(value, str):
@@ -742,7 +747,51 @@ def calculate_project(project):
                    "weight_status": "Partial selected-member takeoff" if weight_known_count < len(members) else "Selected-member takeoff; connections excluded"}
         for kind in ("joist", "girder", "column"):
             summary[kind + "_count"] = sum(m["type"] == kind for m in members)
+
+        # Concrete trade: tilt panel thickness (H/50), slab on grade, and a
+        # roll-up that includes the footings already calculated above.
+        import concrete
+        extra_takeoffs["tilt_wall_concrete"] = concrete.calculate_tilt_wall_concrete(extra_takeoffs["walls"])
+        extra_takeoffs["slab"] = concrete.calculate_slab(bays, p["slab_thickness_in"])
+        extra_takeoffs["concrete_summary"] = concrete.summarize(
+            extra_takeoffs["tilt_wall_concrete"], extra_takeoffs["slab"],
+            extra_takeoffs["footings"], extra_takeoffs.get("mezzanine_footings"))
+        summary["concrete_total_cy"] = extra_takeoffs["concrete_summary"]["total_cy"]
+        # Footings sit under their columns; take the positions from the
+        # modelled column members so the solids line up with the steel.
+        column_positions = {m["id"]: (m["start"][0], m["start"][1])
+                            for m in members if m["type"] == "column"}
+        concrete_solids = concrete.build_solids(
+            bays, xs, ys, extra_takeoffs["tilt_wall_concrete"], extra_takeoffs["slab"],
+            extra_takeoffs["footings"], extra_takeoffs.get("mezzanine_footings"),
+            column_positions)
+
+        # Column safety factor, reported alongside the unfactored demand. It
+        # deliberately does not drive section selection or footing sizing, and
+        # is kept out of `results` so the engine output stays byte-identical
+        # to the original takeoff.
+        factor = float(p["column_safety_factor"])
+        extra_takeoffs["column_safety"] = {
+            "factor": factor,
+            "basis": "Reported only; section selection and footing sizing use the unfactored demand.",
+            "columns": [
+                {"column_id": row.get("column_id", ""),
+                 "grid": f"{row.get('line_label', '')}{row.get('grid_number', '')}",
+                 "required_capacity_kips": float(row["required_capacity_kips"]),
+                 "required_capacity_factored_kips": round(float(row["required_capacity_kips"]) * factor, 3)}
+                for row in results["columns"]["column_calculations"]
+            ],
+            "mezzanine_columns": [
+                {"column_id": row.get("column_id", ""),
+                 "zone_name": row.get("zone_name", ""),
+                 "required_capacity_kips": float(row.get("required_capacity_kips", 0.0)),
+                 "required_capacity_factored_kips": round(float(row.get("required_capacity_kips", 0.0)) * factor, 3)}
+                for row in results["mezzanine"].get("mezzanine_column_calculations", [])
+            ],
+        }
+        summary["column_safety_factor"] = factor
         model = {"project": p, "members": members, "results": results, "bays": bays, "walls": walls,
+                 "concrete_solids": concrete_solids,
                  "takeoffs": extra_takeoffs, "roof_profile": workflow.profile,
                  "selection_groups": workflow.groups,
                  "grid": {"x_lines_ft": xs, "y_lines_ft": ys, "x_lines": xs, "y_lines": ys,

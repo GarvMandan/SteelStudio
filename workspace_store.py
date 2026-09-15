@@ -246,7 +246,7 @@ def save_building(project_id, building_id, payload):
         # Keep the few headline numbers the home page shows, not the
         # whole calculated result.
         keep = ("member_count", "total_weight_lbs", "weight_tons",
-                "floor_area_sf", "bay_count")
+                "floor_area_sf", "bay_count", "concrete_total_cy")
         record["summary"] = {k: payload["summary"][k] for k in keep if k in payload["summary"]}
     if "trades" in payload:
         if not isinstance(payload["trades"], dict):

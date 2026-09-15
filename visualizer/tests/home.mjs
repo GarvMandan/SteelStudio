@@ -85,18 +85,21 @@ await page.locator('.topbar .brand').click();
 await page.waitForTimeout(1200);
 check('home: returns to the project list',
   await page.getByRole('heading', {name: 'Building Estimator'}).isVisible());
-await page.locator('.project-head').click();
+await page.getByRole('button', {name: /^Project Shark/}).click();
 await page.waitForTimeout(600);
 check('home: building card listed', await page.locator('.building-card').isVisible());
 const stats = await page.locator('.building-stats').first().textContent();
 check('home: real quantities persisted', /members/.test(stats || ''), stats);
 check('home: steel shows in progress',
   (await page.locator('.trade-chip.in_progress').count()) > 0);
-check('home: other trades not started',
-  (await page.locator('.trade-chip:not(.in_progress):not(.complete)').count()) >= 4);
+// Steel and concrete both calculate now; HVAC, electrical and plumbing do not.
+check('home: MEP trades not started',
+  (await page.locator('.trade-chip:not(.in_progress):not(.complete)').count()) >= 3);
+check('home: concrete reported in progress',
+  (await page.locator('.trade-chip.in_progress').count()) >= 2);
 
 // Reopen: the saved design must come back, not the defaults.
-await page.locator('.building-open').click();
+await page.getByRole('button', {name: /Warehouse A/}).first().click();
 await page.waitForSelector('.topbar', {timeout: 30000});
 await page.waitForTimeout(5000);
 await page.getByRole('button', {name: 'Grid & dimensions'}).click();

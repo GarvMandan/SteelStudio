@@ -259,6 +259,7 @@ export function Home({onOpenBuilding, notify}) {
                           {b.summary?.member_count ? (
                             <p className="building-stats">
                               {num(b.summary.member_count)} members · {num(b.summary.weight_tons, 2)} tons
+                              {b.summary.concrete_total_cy ? ` · ${num(b.summary.concrete_total_cy)} CY concrete` : ''}
                             </p>
                           ) : <p className="building-stats muted">Not yet calculated</p>}
                           <div className="trade-row">
