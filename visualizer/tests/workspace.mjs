@@ -33,7 +33,24 @@ try{
   const a=await svgPoint(x0,y0),b=await svgPoint(x1,y1);
   await page.mouse.move(a.x,a.y);await page.mouse.down();await page.mouse.move(b.x,b.y,{steps:8});await page.mouse.up();
  };
- await page.goto(url);await page.getByRole('img',{name:'Editable building plan',exact:true}).waitFor();
+ // The app opens on the estimator home page; create a building so these
+ // checks run against the designer as they did before.
+ await page.goto(url);
+ await page.getByLabel('New project name').waitFor({timeout:30000});
+ await page.getByLabel('New project name').fill('Workspace checks');
+ await page.getByRole('button',{name:/Add project/}).click();
+ await page.getByRole('button',{name:/Add building/}).waitFor({timeout:30000});
+ await page.getByRole('button',{name:/Add building/}).click();
+ await page.getByLabel('Building name',{exact:true}).waitFor({timeout:30000});
+ await page.getByLabel('Building name',{exact:true}).fill('Checks');
+ // These checks assume the historical 3x2 @ 40 ft starting grid.
+ await page.getByLabel('Building width',{exact:true}).fill('120');
+ await page.getByLabel('Building length',{exact:true}).fill('80');
+ await page.getByLabel('Bay spacing across',{exact:true}).fill('40');
+ await page.getByLabel('Bay spacing along',{exact:true}).fill('40');
+ await page.getByLabel('Clear height',{exact:true}).fill('24');
+ await page.getByRole('button',{name:/Create building/}).click();
+ await page.getByRole('img',{name:'Editable building plan',exact:true}).waitFor({timeout:60000});
  await mkdir('test-results',{recursive:true});
  assert.equal(await page.locator('.design-panel').count(),0);assert.equal(await page.locator('.inspector').count(),0);
  assert.ok((await page.getByRole('img',{name:'Editable building plan'}).boundingBox()).width>1400);

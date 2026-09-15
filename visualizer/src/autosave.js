@@ -11,6 +11,8 @@
  */
 
 const KEY = 'steel-studio:draft:v1';
+// Each building recovers independently.
+const keyFor = id => (id ? `${KEY}:${id}` : KEY);
 const INTERVAL_MS = 10000;
 // localStorage is ~5 MB; a very large project should fail to autosave
 // rather than throw on every keystroke.
@@ -21,10 +23,10 @@ function now() {
 }
 
 /** Read a stored draft, or null when absent/unusable. */
-export function readDraft() {
+export function readDraft(id) {
   let raw;
   try {
-    raw = localStorage.getItem(KEY);
+    raw = localStorage.getItem(keyFor(id));
   } catch {
     return null; // private window, or site data blocked
   }
@@ -35,13 +37,13 @@ export function readDraft() {
     return { project: saved.project, savedAt: saved.savedAt || '', name: saved.name || '' };
   } catch {
     // Corrupt entry helps nobody; clear it so recovery is not offered again.
-    clearDraft();
+    clearDraft(id);
     return null;
   }
 }
 
 /** Persist a draft. Returns true when stored. */
-export function writeDraft(project) {
+export function writeDraft(project, id) {
   if (!project) return false;
   let payload;
   try {
@@ -51,18 +53,18 @@ export function writeDraft(project) {
   }
   if (payload.length > MAX_BYTES) return false;
   try {
-    localStorage.setItem(KEY, payload);
+    localStorage.setItem(keyFor(id), payload);
     return true;
   } catch {
     // Quota exceeded or storage unavailable: drop the stale entry so a
     // later, smaller save can succeed.
-    try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+    try { localStorage.removeItem(keyFor(id)); } catch { /* ignore */ }
     return false;
   }
 }
 
-export function clearDraft() {
-  try { localStorage.removeItem(KEY); } catch { /* ignore */ }
+export function clearDraft(id) {
+  try { localStorage.removeItem(keyFor(id)); } catch { /* ignore */ }
 }
 
 /** Human-readable age, e.g. "just now", "4 minutes ago". */
@@ -83,7 +85,7 @@ export function describeAge(iso) {
  * Autosave `getProject()` on an interval and on page hide.
  * Returns a stop function. Safe to call when storage is unavailable.
  */
-export function startAutosave(getProject, { intervalMs = INTERVAL_MS } = {}) {
+export function startAutosave(getProject, { intervalMs = INTERVAL_MS, key } = {}) {
   let last = '';
   const save = () => {
     const project = getProject();
@@ -95,7 +97,7 @@ export function startAutosave(getProject, { intervalMs = INTERVAL_MS } = {}) {
       return;
     }
     if (serialized === last) return; // nothing changed since the last write
-    if (writeDraft(project)) last = serialized;
+    if (writeDraft(project, key)) last = serialized;
   };
   const timer = setInterval(save, intervalMs);
   // pagehide/visibilitychange fire on tab close and mobile backgrounding,

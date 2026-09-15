@@ -16,7 +16,17 @@ try{
  browser=await chromium.launch({channel:process.env.BROWSER_CHANNEL||'msedge',headless:true});
  const page=await browser.newPage({viewport:{width:1600,height:1060}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
- await page.goto(url);await page.getByRole('img',{name:'Editable building plan',exact:true}).waitFor();
+ // The app opens on the estimator home page; create a building first.
+ await page.goto(url);
+ await page.getByLabel('New project name').waitFor({timeout:30000});
+ await page.getByLabel('New project name').fill('Report checks');
+ await page.getByRole('button',{name:/Add project/}).click();
+ await page.getByRole('button',{name:/Add building/}).waitFor({timeout:30000});
+ await page.getByRole('button',{name:/Add building/}).click();
+ await page.getByLabel('Building name',{exact:true}).waitFor({timeout:30000});
+ await page.getByLabel('Building name',{exact:true}).fill('Report building');
+ await page.getByRole('button',{name:/Create building/}).click();
+ await page.getByRole('img',{name:'Editable building plan',exact:true}).waitFor({timeout:60000});
  const original=await(await page.request.get(url+'/api/project')).json();
  await page.getByRole('button',{name:'3D review',exact:true}).click();await page.locator('.canvas-mount canvas').waitFor();
  await page.getByRole('button',{name:'Plan - north up',exact:true}).click();await page.waitForTimeout(750);

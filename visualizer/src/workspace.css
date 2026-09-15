@@ -266,3 +266,62 @@
 .layer-actions{display:flex;gap:.4rem;flex-wrap:wrap}
 .button.danger{border-color:#8a5442;color:#f0c9ba}
 .button.danger:hover{background:rgba(138,84,66,.22)}
+
+/* Estimator home page */
+.home{max-width:70rem;margin:0 auto;padding:2rem 1.5rem 4rem}
+.home.loading{display:flex;flex-direction:column;align-items:center;gap:.8rem;padding-top:6rem;opacity:.75}
+.home-head{display:flex;align-items:center;gap:1rem;margin-bottom:1.6rem}
+.home-head h1{margin:0;font-size:1.6rem}
+.home-head p{margin:.15rem 0 0;opacity:.7;font-size:.94rem}
+.new-project{display:flex;gap:.5rem;margin-bottom:1.4rem}
+.new-project input{flex:1;padding:.6rem .8rem;border-radius:.45rem;font:inherit;
+  border:1px solid rgba(255,255,255,.16);background:rgba(0,0,0,.22);color:inherit}
+.home-empty{text-align:center;padding:3rem 1rem;opacity:.65}
+.home-empty h2{margin:.7rem 0 .3rem;font-size:1.1rem}
+.home-empty p{margin:0;font-size:.92rem}
+.project-list{display:flex;flex-direction:column;gap:.7rem}
+.project-card{border:1px solid rgba(255,255,255,.12);border-radius:.6rem;background:rgba(255,255,255,.03);overflow:hidden}
+.project-card.open{border-color:rgba(143,174,94,.4)}
+.project-head{display:flex;align-items:center;gap:.7rem;width:100%;padding:.9rem 1rem;
+  background:none;border:0;color:inherit;cursor:pointer;font:inherit;text-align:left}
+.project-head .chev{transition:transform .15s;opacity:.6;flex:none}
+.project-card.open .project-head .chev{transform:rotate(90deg)}
+.project-title h2{margin:0;font-size:1.05rem}
+.project-title span{font-size:.85rem;opacity:.62}
+.project-body{padding:0 1rem 1rem;display:flex;flex-direction:column;gap:.9rem}
+.building-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));gap:.6rem}
+.building-card{position:relative;border:1px solid rgba(255,255,255,.12);border-radius:.5rem;
+  background:rgba(0,0,0,.18);overflow:hidden}
+.building-card:hover{border-color:rgba(143,174,94,.45)}
+.building-open{display:block;width:100%;padding:.8rem .9rem .7rem;background:none;border:0;
+  color:inherit;cursor:pointer;font:inherit;text-align:left}
+.building-open h3{margin:0 0 .25rem;font-size:.98rem}
+.building-stats{margin:0 0 .5rem;font-size:.82rem;opacity:.75}
+.building-stats.muted{opacity:.45;font-style:italic}
+.trade-row{display:flex;flex-wrap:wrap;gap:.25rem}
+.trade-chip{display:inline-flex;align-items:center;gap:.22rem;padding:.13rem .4rem;
+  border-radius:.9rem;font-size:.7rem;background:rgba(255,255,255,.06);opacity:.55}
+.trade-chip.in_progress{background:rgba(143,174,94,.2);opacity:1;color:#cfe0ae}
+.trade-chip.complete{background:rgba(94,150,110,.26);opacity:1;color:#b6e0c2}
+.building-actions{position:absolute;top:.45rem;right:.45rem;display:flex;gap:.2rem;opacity:0;transition:opacity .12s}
+.building-card:hover .building-actions,.building-card:focus-within .building-actions{opacity:1}
+.building-actions button{padding:.25rem;border-radius:.3rem;background:rgba(0,0,0,.5);
+  border:1px solid rgba(255,255,255,.14);color:inherit;cursor:pointer;line-height:0}
+.building-actions button:hover{border-color:#8a5442;color:#f0c9ba}
+.project-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+
+/* Guided new-building setup */
+.new-building{border:1px solid rgba(143,174,94,.4);border-radius:.55rem;
+  padding:1rem;background:rgba(143,174,94,.06);display:flex;flex-direction:column;gap:.7rem}
+.new-building h2{margin:0;font-size:1.05rem}
+.new-building .hint{margin:0}
+.setup-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.55rem}
+.setup-preview{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;
+  padding:.8rem;border-radius:.45rem;background:rgba(0,0,0,.24)}
+.setup-preview svg{width:min(19rem,100%);height:auto}
+.preview-slab{fill:rgba(143,174,94,.1);stroke:rgba(143,174,94,.55);stroke-width:1.5}
+.preview-line{stroke:rgba(255,255,255,.28);stroke-width:1}
+.preview-caption{display:flex;flex-direction:column;gap:.15rem;margin:0;font-size:.88rem}
+.preview-caption span{opacity:.68;font-size:.82rem}
+.setup-actions{display:flex;justify-content:flex-end;gap:.5rem}
+button.brand{background:none;border:0;cursor:pointer;font:inherit;color:inherit;text-align:left}

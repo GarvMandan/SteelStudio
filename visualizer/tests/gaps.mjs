@@ -20,6 +20,19 @@ const page = await context.newPage();
 page.on('pageerror', e => { failures++; console.log('  PAGE ERROR:', e.message); });
 
 await page.goto(URL, {waitUntil: 'networkidle'});
+await page.waitForTimeout(800);
+
+// The app now opens on the estimator home page; get into a building first.
+await page.getByLabel('New project name').fill('Gap checks');
+await page.getByRole('button', {name: /Add project/}).click();
+await page.waitForTimeout(900);
+await page.getByRole('button', {name: /Add building/}).click();
+await page.waitForTimeout(400);
+await page.getByLabel('Building name', {exact: true}).fill('Test building');
+await page.getByRole('button', {name: /Create building/}).click();
+await page.waitForSelector('.topbar', {timeout: 30000});
+await page.waitForTimeout(5000);
+
 await page.getByRole('button', {name: 'Loads & foundations'}).click();
 await page.waitForTimeout(400);
 
@@ -27,6 +40,9 @@ await page.waitForTimeout(400);
 check('snow: city field present', await page.getByLabel('City', {exact: true}).isVisible());
 check('snow: state field present', await page.getByLabel('State', {exact: true}).isVisible());
 const lookupBtn = page.getByRole('button', {name: /Look up ground snow load/});
+await page.getByLabel('City', {exact: true}).fill('');
+await page.getByLabel('State', {exact: true}).fill('');
+await page.waitForTimeout(250);
 check('snow: button disabled with no location', await lookupBtn.isDisabled());
 
 await page.getByLabel('City', {exact: true}).fill('Denver');
@@ -69,7 +85,10 @@ check('layers: select-all works', pressed === bayCount, `${pressed}/${bayCount}`
 
 // --- Autosave ----------------------------------------------------------
 await page.waitForTimeout(11000); // one autosave interval
-const stored = await page.evaluate(() => localStorage.getItem('steel-studio:draft:v1'));
+const stored = await page.evaluate(() => {
+  const k = Object.keys(localStorage).find(k => k.startsWith('steel-studio:draft:v1'));
+  return k ? localStorage.getItem(k) : null;
+});
 check('autosave: wrote to localStorage', !!stored);
 let saved = null;
 try { saved = JSON.parse(stored); } catch { /* handled by the check below */ }
@@ -80,7 +99,12 @@ check('autosave: recorded a timestamp', !!saved?.savedAt);
 
 // --- Crash recovery ----------------------------------------------------
 await page.reload({waitUntil: 'networkidle'});
-await page.waitForTimeout(1500);
+await page.waitForTimeout(1200);
+await page.getByRole('button', {name: /^Gap checks/}).click();
+await page.waitForTimeout(500);
+await page.getByRole('button', {name: /Test building/}).first().click();
+await page.waitForSelector('.topbar', {timeout: 30000});
+await page.waitForTimeout(4000);
 const banner = page.locator('.recovery-banner');
 check('recovery: banner offered after reload', await banner.isVisible());
 await page.getByRole('button', {name: /^Restore$/}).click();
