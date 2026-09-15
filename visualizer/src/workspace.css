@@ -326,14 +326,35 @@
 .setup-actions{display:flex;justify-content:flex-end;gap:.5rem}
 button.brand{background:none;border:0;cursor:pointer;font:inherit;color:inherit;text-align:left}
 
-/* Concrete quantity summary */
-.concrete-summary{margin-top:.9rem;padding-top:.8rem;border-top:1px solid rgba(255,255,255,.1)}
-.concrete-rows{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.45rem}
-.concrete-rows button{display:flex;flex-direction:column;gap:.15rem;padding:.5rem .6rem;text-align:left;
-  border:1px solid rgba(255,255,255,.12);border-radius:.45rem;background:rgba(255,255,255,.03);
-  color:inherit;cursor:pointer;font:inherit}
-.concrete-rows button:hover{border-color:rgba(168,164,156,.6)}
-.concrete-rows span{font-size:.78rem;opacity:.7}
-.concrete-rows strong{display:flex;flex-direction:column;font-size:1.02rem;font-weight:600}
-.concrete-rows small{font-size:.74rem;opacity:.62;font-weight:400}
-.concrete-rows .concrete-total{border-color:rgba(168,164,156,.45);background:rgba(168,164,156,.1)}
+
+/* Quantities dock: collapsible, so the plan keeps its height. Concrete
+   tiles sit in the same strip as the steel ones rather than stacking. */
+.studio-workspace .quantities-dock{position:relative;transition:min-height .16s ease}
+.studio-workspace .quantities-dock.collapsed{min-height:34px;padding-top:0;padding-bottom:0;overflow:hidden}
+.quantities-dock.collapsed .takeoff-summary,.quantities-dock.collapsed .dock-status{display:none}
+.quantities-dock.collapsed::before{content:'Quantities';position:absolute;left:28px;top:50%;
+  transform:translateY(-50%);font-size:12px;color:#a5bdcc;letter-spacing:.04em}
+.dock-toggle{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;
+  align-items:center;justify-content:center;width:28px;height:28px;padding:0;border-radius:5px;
+  background:rgba(255,255,255,.06);border:1px solid #3c5465;color:#a5bdcc;cursor:pointer;line-height:0}
+.dock-toggle:hover{background:rgba(255,255,255,.12);color:#e6f0f6}
+/* Eight tiles is a lot; let them shrink and scroll rather than wrap. */
+.quantities-dock .takeoff-summary{gap:18px;overflow-x:auto;scrollbar-width:thin}
+/* Keep the toggle clear of the status text instead of overlapping it. */
+.studio-workspace .quantities-dock{padding-right:60px}
+.quantities-dock .dock-status{padding-right:4px}
+.quantities-dock .takeoff-summary-row{padding-right:16px;min-width:max-content;flex:0 0 auto}
+.quantities-dock .takeoff-summary-row strong{font-size:19px}
+
+
+/* The building layout page is for the grid: give the plan the space and
+   trim the chrome around it. Previously the heading, bay ribbon and an
+   always-open roof preview pushed the plan into a scrolling sliver. */
+.studio-workspace .plan-editor{flex:1 1 360px;min-height:360px;margin-bottom:18px}
+.studio-workspace .workspace-heading{padding:14px 32px 10px}
+.workspace-heading h1{font-size:21px;margin:2px 0}
+.studio-workspace .bay-ribbon{padding-top:0;padding-bottom:10px}
+/* The roof preview is a secondary reference here; collapse it by default
+   and keep it compact when opened. */
+.studio-workspace .layout-roof{flex:0 0 auto;margin-bottom:14px}
+.studio-workspace .layout-roof .roof-section{height:150px;min-height:150px}
