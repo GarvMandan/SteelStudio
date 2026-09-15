@@ -32,6 +32,35 @@ See [the Steel Studio guide](docs/STEEL_STUDIO.md) for controls, data behavior, 
 
 The 3D profiles are schematic. The original engine calculates takeoff demands; it does not verify structural adequacy, connections, lateral stability, or code compliance. Unassigned sections contribute no weight, and all assigned sections remain unchecked.
 
+## Hosted deployment
+
+A live instance runs at <https://steel-studio.onrender.com>.
+
+The same `visualizer.py` entrypoint serves both the local app and a hosted
+one; deployment is controlled entirely by environment variables, so local
+behaviour is unchanged when they are unset:
+
+| Variable | Purpose |
+| --- | --- |
+| `HOST` | Bind address. Defaults to `127.0.0.1`; set to `0.0.0.0` to accept connections from a proxy. |
+| `PORT` | Port to bind. Most platforms set this automatically. |
+| `TRUST_PROXY_HOST` | Set to `1` when running behind a TLS-terminating proxy. Relaxes the localhost-only host check while still requiring a request's `Origin` to match its own `Host`, so cross-site calls stay blocked. |
+| `STEEL_STUDIO_DATA_DIR` | Where saved projects are written. Point this at a mounted persistent disk on a host with an ephemeral filesystem. |
+
+`render.yaml` defines the service for [Render](https://render.com); deploy it
+via **New + → Blueprint**. Note that Render does not always apply new
+`envVars` from a Blueprint on a plain auto-deploy, so confirm
+`TRUST_PROXY_HOST=1` is present under the service's Environment tab.
+
+Install `requirements-web.txt` rather than `requirements.txt` for a server:
+it omits the desktop-only packages (matplotlib, PyInstaller, ttkbootstrap,
+pywin32) that only `grid_gui.py` needs.
+
+Two caveats for the free tier: the service sleeps after inactivity and takes
+roughly 30-50 seconds to wake, and its filesystem is ephemeral, so saved
+projects are lost on redeploy unless `STEEL_STUDIO_DATA_DIR` points at a
+persistent disk.
+
 ## Original desktop application
 
 Interactive grid modeling for structural steel takeoffs with a joist-first calculation step.
