@@ -172,7 +172,126 @@ def summarize(walls_concrete, slab, footings, mezz_footings=None):
     }
 
 
-def build_solids(bays, xs, ys, walls_concrete, slab, footings, mezz_footings=None,
+def build_perimeter_panels(boundary_segments, xs, ys, roof_heights_ft, clear_height_ft,
+                           deck_ft=0.0, insulation_ft=0.0, base_elevation_ft=-1.0,
+                           active_bays=frozenset()):
+    """One tilt panel per boundary segment of the active footprint.
+
+    Walls follow the real perimeter, so removing bays moves the wall rather
+    than leaving it on the original bounding rectangle. Panels along the
+    sloped elevations step with the roof: each segment takes the top of its
+    own span, which is how stepped tilt panels are actually cast.
+
+    `boundary_segments` are the engine's ("H"|"V", line_index, segment_index)
+    tuples. `roof_heights_ft` is top-of-joist per Y grid line.
+    """
+    thickness_in = required_thickness_in(clear_height_ft)
+    thickness_ft = thickness_in / 12.0
+    nx, ny = len(xs) - 1, len(ys) - 1
+
+    def top_of_roof(y_line):
+        toj = float(roof_heights_ft[max(0, min(len(roof_heights_ft) - 1, y_line))])
+        return toj + deck_ft + insulation_ft
+
+    panels = []
+    for orientation, line, segment in sorted(boundary_segments):
+        if orientation == "H":
+            if not (0 <= segment < nx and 0 <= line <= ny):
+                continue
+            start = [xs[segment], ys[line]]
+            end = [xs[segment + 1], ys[line]]
+            length = abs(end[0] - start[0])
+            # North face looks north (-Y); a south face looks south (+Y).
+            # A step-in face looks whichever way the missing bays are.
+            outward = -1.0 if line == 0 or (line < ny and ("H", line, segment) in boundary_segments
+                                            and (segment, line) in active_bays) else 1.0
+            top = top_of_roof(line)
+            side = "North" if line == 0 else "South" if line == ny else ("North" if outward < 0 else "South")
+            label = f"{side} panel {segment + 1}"
+        else:
+            if not (0 <= segment < ny and 0 <= line <= nx):
+                continue
+            start = [xs[line], ys[segment]]
+            end = [xs[line], ys[segment + 1]]
+            length = abs(end[1] - start[1])
+            outward = -1.0 if line == 0 or (line < nx and (line, segment) in active_bays) else 1.0
+            # A side wall steps with the roof: take the high end of its span
+            # so the panel covers the opening it closes.
+            top = max(top_of_roof(segment), top_of_roof(segment + 1))
+            side = "West" if line == 0 else "East" if line == nx else ("West" if outward < 0 else "East")
+            label = f"{side} panel {segment + 1}"
+        if length <= 0:
+            continue
+        height = top - base_elevation_ft
+        area = length * height
+        panels.append({
+            "id": f"TW-{orientation}-{line + 1}-{segment + 1}",
+            "label": label,
+            "orientation": orientation,
+            "line_index": line,
+            "segment_index": segment,
+            "start": start, "end": end,
+            "outward": outward,
+            "length_ft": round(length, 3),
+            "top_of_roof_ft": round(top, 3),
+            "base_elevation_ft": base_elevation_ft,
+            "height_ft": round(height, 3),
+            "thickness_in": thickness_in,
+            "area_sf": round(area, 3),
+            "volume_cy": round(area * thickness_ft / CUBIC_FEET_PER_YARD, 4),
+        })
+    return panels
+
+
+def summarize_perimeter_panels(panels, clear_height_ft):
+    """Totals for perimeter-following panels, grouped by elevation."""
+    total_cy = sum(float(p["volume_cy"]) for p in panels)
+    total_sf = sum(float(p["area_sf"]) for p in panels)
+    raw_in = round(float(clear_height_ft) * 12.0 / HEIGHT_DIVISOR, 3)
+    thickness = required_thickness_in(clear_height_ft)
+    by_side = {}
+    for panel in panels:
+        side = panel["label"].split(" panel")[0]
+        entry = by_side.setdefault(side, {"wall": side, "panel_count": 0, "area_sf": 0.0,
+                                          "volume_cy": 0.0, "min_height_ft": None,
+                                          "max_height_ft": None, "thickness_in": thickness})
+        entry["panel_count"] += 1
+        entry["area_sf"] += float(panel["area_sf"])
+        entry["volume_cy"] += float(panel["volume_cy"])
+        h = float(panel["height_ft"])
+        entry["min_height_ft"] = h if entry["min_height_ft"] is None else min(entry["min_height_ft"], h)
+        entry["max_height_ft"] = h if entry["max_height_ft"] is None else max(entry["max_height_ft"], h)
+    for entry in by_side.values():
+        entry["area_sf"] = round(entry["area_sf"], 3)
+        entry["volume_cy"] = round(entry["volume_cy"], 4)
+        entry["stepped"] = abs(entry["max_height_ft"] - entry["min_height_ft"]) > 0.01
+    order = ["North", "South", "East", "West"]
+    sides = sorted(by_side.values(), key=lambda e: order.index(e["wall"]) if e["wall"] in order else 99)
+    return {
+        "panels": panels,
+        "elevations": sides,
+        "method": "Clear height / 50, rounded up to the nearest 1/2 in, minimum 7.5 in",
+        "minimum_thickness_in": MIN_THICKNESS_IN,
+        "clear_height_ft": round(float(clear_height_ft), 3),
+        "required_thickness_raw_in": raw_in,
+        "governed_by_minimum": raw_in < MIN_THICKNESS_IN,
+        "basis": (
+            "Panels follow the perimeter of the active footprint and step with "
+            "the roof. Thickness from the unsupported (clear) height between "
+            "slab and roof diaphragm. Preliminary estimating rule for standard "
+            "panels under roughly 15-20 psf wind; not an ACI 318 panel design."
+        ),
+        "summary": {
+            "panel_count": len(panels),
+            "max_thickness_in": thickness,
+            "total_area_sf": round(total_sf, 3),
+            "total_cy": round(total_cy, 4),
+            "total_cy_with_waste": round(total_cy * WASTE_FACTOR, 4),
+        },
+    }
+
+
+def build_solids(bays, xs, ys, wall_panels, slab, footings, mezz_footings=None,
                  column_positions=None):
     """Box geometry for the concrete elements, for the 3D model.
 
@@ -237,29 +356,29 @@ def build_solids(bays, xs, ys, walls_concrete, slab, footings, mezz_footings=Non
                 ),
             })
 
-    # Tilt wall panels: one box per elevation, at its governing thickness,
-    # sitting just outside the building line so the steel stays visible.
-    width_ft = float(xs[-1]) if xs else 0.0
-    length_ft = float(ys[-1]) if ys else 0.0
-    for panel in ((walls_concrete or {}).get("panels") or []):
+    # Tilt wall panels: one box per boundary segment, following the real
+    # perimeter of the active footprint rather than the bounding rectangle,
+    # and stepping with the roof so sloped elevations read as they are built.
+    for panel in wall_panels or []:
         t = float(panel.get("thickness_in") or 0.0) / 12.0
-        height = float(panel.get("governing_height_ft") or 0.0)
-        base = -1.0  # the original takeoff sets the panel base one foot below grade
+        height = float(panel.get("height_ft") or 0.0)
+        base = float(panel.get("base_elevation_ft", -1.0))
         if t <= 0 or height <= 0:
             continue
-        key = panel.get("key")
-        if key in ("north_wall", "south_wall"):
-            y = 0.0 if key == "north_wall" else length_ft
-            centre = [width_ft / 2, y + (-t / 2 if key == "north_wall" else t / 2)]
-            size = [width_ft, t]
+        if panel["orientation"] == "H":
+            x0, x1 = panel["start"][0], panel["end"][0]
+            y = panel["start"][1]
+            centre = [(x0 + x1) / 2, y + (t / 2) * panel["outward"]]
+            size = [abs(x1 - x0), t]
         else:
-            x = width_ft if key == "east_wall" else 0.0
-            centre = [x + (t / 2 if key == "east_wall" else -t / 2), length_ft / 2]
-            size = [t, length_ft]
+            y0, y1 = panel["start"][1], panel["end"][1]
+            x = panel["start"][0]
+            centre = [x + (t / 2) * panel["outward"], (y0 + y1) / 2]
+            size = [t, abs(y1 - y0)]
         solids.append({
-            "id": f"TW-{panel.get('wall', '')}",
+            "id": panel["id"],
             "type": "tilt_wall", "discipline": "concrete", "level": "roof",
-            "label": f"{panel.get('wall', '')} tilt panel",
+            "label": panel["label"],
             "center": [round(centre[0], 4), round(centre[1], 4), round(base + height / 2, 4)],
             "size": [round(size[0], 4), round(size[1], 4), round(height, 4)],
             "thickness_in": panel.get("thickness_in"),
@@ -268,9 +387,9 @@ def build_solids(bays, xs, ys, walls_concrete, slab, footings, mezz_footings=Non
             "height_ft": round(height, 3),
             "description": (
                 f"Tilt-up panel {panel.get('thickness_in')} in thick, "
-                f"{panel.get('governing_height_ft')} ft tall, {panel.get('area_sf')} sf, "
-                f"{panel.get('volume_cy')} CY. Thickness from H/50, minimum "
-                f"{MIN_THICKNESS_IN} in."
+                f"{round(height, 2)} ft tall, {panel.get('area_sf')} sf, "
+                f"{panel.get('volume_cy')} CY. Thickness from clear height / 50, "
+                f"minimum {MIN_THICKNESS_IN} in."
             ),
         })
     return solids

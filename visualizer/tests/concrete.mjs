@@ -41,26 +41,34 @@ await page.waitForTimeout(700);
 await page.getByRole('button', {name: 'Concrete', exact: true}).click();
 await page.waitForTimeout(600);
 const body = await page.locator('.takeoff-report').textContent();
-check('concrete: tab renders', /tilt panel/i.test(body || ''));
+check('concrete: tab renders', /tilt wall/i.test(body || ''));
 check('concrete: slab row present', /Slab on grade/.test(body || ''));
 check('concrete: footings row present', /Spread footings/.test(body || ''));
 
 // Read the model directly to verify the numbers behind the table.
 const model = await page.evaluate(async () => (await (await fetch('/api/project')).json()));
 const panels = model.takeoffs.tilt_wall_concrete.panels;
-check('H/50: panels calculated', panels.length === 4, `${panels.length} panels`);
+check('walls: one panel per perimeter segment', panels.length >= 4, `${panels.length} panels`);
+
+// Sloped elevations must step with the roof, not sit at one height.
+const elevations = model.takeoffs.tilt_wall_concrete.elevations;
+check('walls: east and west step with the roof',
+  elevations.filter(e => (e.wall === 'East' || e.wall === 'West') && e.stepped).length === 2,
+  elevations.map(e => `${e.wall}:${e.stepped ? 'stepped' : 'flat'}`).join(' '));
+check('walls: stepped elevations span a height range',
+  elevations.filter(e => e.stepped).every(e => e.max_height_ft - e.min_height_ft > 0.01));
 const expected = h => Math.max(7.5, Math.ceil((h * 12 / 50 - 1e-9) * 2) / 2);
-const clear = model.project.clear_height_ft;
-const allRight = panels.every(p => Math.abs(p.thickness_in - expected(p.unsupported_height_ft)) < 1e-9);
-check('thickness matches clear-height/50', allRight,
-  panels.map(p => `${p.wall} clear ${p.unsupported_height_ft}ft->${p.thickness_in}"`).join(' '));
+const clear = model.takeoffs.tilt_wall_concrete.clear_height_ft;
+const want = expected(clear);
+check('thickness matches clear-height/50',
+  panels.every(p => Math.abs(p.thickness_in - want) < 1e-9),
+  `clear ${clear} ft -> ${want}"`);
 check('thickness uses clear height, not panel height',
-  panels.every(p => Math.abs(p.unsupported_height_ft - clear) < 0.01
-    && p.panel_height_ft > p.unsupported_height_ft),
-  `clear ${clear} vs panels ${panels.map(p => p.panel_height_ft.toFixed(1)).join('/')}`);
-check('H/50: above the 7.5in minimum on a tall wall',
-  panels.every(p => p.thickness_in > 7.5), panels.map(p => p.thickness_in).join(', '));
-check('H/50: all half-inch multiples', panels.every(p => (p.thickness_in * 2) % 1 === 0));
+  panels.every(p => p.height_ft > clear),
+  `clear ${clear} vs panel heights ${panels.map(p => p.height_ft.toFixed(1)).join('/')}`);
+check('all thicknesses are half-inch multiples',
+  panels.every(p => (p.thickness_in * 2) % 1 === 0));
+check('never below the 7.5 in minimum', panels.every(p => p.thickness_in >= 7.5));
 
 const slab = model.takeoffs.slab;
 check('slab: default 6 in', slab.thickness_in === 6, `${slab.thickness_in} in`);
@@ -110,6 +118,11 @@ await page.getByLabel('Slab on grade').check();
 await page.waitForTimeout(500);
 check('3D: rechecking restores them', (await visible()) === -1 || (await visible()) === total);
 
+// Close the Display dialog: while open it intercepts pointer events, so
+// canvas clicks below would never reach the model.
+await page.keyboard.press('Escape');
+await page.waitForTimeout(700);
+
 // Regression: hovering a concrete solid used to read .section on an object
 // that has none, throwing and blanking the whole app.
 const cbox = await page.locator('.canvas-mount canvas').boundingBox();
@@ -123,18 +136,72 @@ check('3D: app survives hovering concrete',
 const picked = await page.evaluate(() => {
   const s = window.__steelScene, m = s.concreteMeshes.find(x => x.userData.member.type === 'footing');
   if (!m) return null;
-  s.settings.joist = false; s.settings.girder = false; s.settings.column = false; s.setSettings({});
-  s.camera.position.set(m.position.x + 7, m.position.y + 5, m.position.z + 7);
+  // Hide everything that could sit between the camera and the footing.
+  s.settings.joist = false; s.settings.girder = false; s.settings.column = false;
+  s.settings.slab = false; s.settings.tilt_wall = false; s.setSettings({});
+  s.camera.position.set(m.position.x + 6, m.position.y + 6, m.position.z + 6);
   s.controls.target.copy(m.position); s.controls.update(); s.tween = null;
   return m.userData.member.id;
 });
-await page.waitForTimeout(1400);
-await page.mouse.click(cbox.x + cbox.width / 2, cbox.y + cbox.height / 2);
+await page.waitForTimeout(1600);
+const at = await page.evaluate(id => {
+  const s = window.__steelScene;
+  const m = s.concreteMeshes.find(x => x.userData.member.id === id);
+  if (!m) return null;
+  const v = m.position.clone().project(s.camera);
+  const r = s.renderer.domElement.getBoundingClientRect();
+  return {x: r.left + (v.x + 1) / 2 * r.width, y: r.top + (1 - v.y) / 2 * r.height};
+}, picked);
+if (at) await page.mouse.click(at.x, at.y);
 await page.waitForTimeout(1200);
 check('3D: selecting a footing opens the concrete inspector',
   (await page.locator('.concrete-inspect').count()) === 1, picked || 'no footing');
 check('3D: app still alive after selecting concrete',
   (await page.locator('body').textContent()).length > 200);
+
+// Removing bays must move the wall to the new perimeter, not leave it on
+// the original bounding rectangle.
+const wallBefore = await page.evaluate(async () => {
+  const d = await (await fetch('/api/project')).json();
+  return {area: d.takeoffs.tilt_wall_concrete.summary.total_area_sf,
+          slab: d.takeoffs.slab.area_sf,
+          active: d.bays.filter(b => b.active).length};
+});
+await page.keyboard.press('Escape');
+await page.waitForTimeout(600);
+await page.locator('.view-switch').getByRole('button', {name: /Building layout/}).click();
+await page.waitForTimeout(1200);
+await page.getByRole('button', {name: 'Footprint', exact: true}).click();
+await page.waitForTimeout(500);
+// Toggle off two bays that are currently ACTIVE. Picking blindly can hit a
+// bay that is already inactive and switch it back on, so read the state first.
+const targets = await page.evaluate(async () => {
+  const d = await (await fetch('/api/project')).json();
+  return d.bays.filter(b => b.active).slice(0, 2).map(b => b.id);
+});
+let removed = 0;
+for (const id of targets) {
+  const cell = page.locator(`.plan-editor *:text-is("${id}")`).first();
+  if (await cell.count()) { await cell.click({force: true}); removed++; }
+  await page.waitForTimeout(1200);
+}
+check('walls: both target bays were clickable', removed === 2, `${targets.join(',')} ${removed}/2`);
+await page.waitForTimeout(8000);
+const wallAfter = await page.evaluate(async () => {
+  const d = await (await fetch('/api/project')).json();
+  return {area: d.takeoffs.tilt_wall_concrete.summary.total_area_sf,
+          slab: d.takeoffs.slab.area_sf,
+          active: d.bays.filter(b => b.active).length,
+          total: d.bays.length};
+});
+check('walls: exactly two bays removed', wallAfter.active === wallBefore.active - 2,
+  `${wallBefore.active} -> ${wallAfter.active} of ${wallAfter.total}`);
+// A notch can add return walls, so the area may rise or fall -- what
+// matters is that the wall responds to the footprint at all.
+check('walls: wall area follows the new perimeter', wallAfter.area !== wallBefore.area,
+  `${Math.round(wallBefore.area)} -> ${Math.round(wallAfter.area)} sf`);
+check('walls: slab follows the new footprint', wallAfter.slab < wallBefore.slab,
+  `${Math.round(wallBefore.slab)} -> ${Math.round(wallAfter.slab)} sf`);
 
 await browser.close();
 console.log(failures ? `\n${failures} FAILURES` : '\nALL PASS');

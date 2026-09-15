@@ -40,7 +40,8 @@ class ReportTests(unittest.TestCase):
         text = '\n'.join(page.extract_text() for page in report.pages)
         self.assertEqual(len(report.pages[0].images), 1)
         for expected in ['QA & Co <Review>', 'Office mezzanine', 'Roof profile & elevations',
-                         'Gross area (sf)', 'Steel section schedule', 'Pad size (ft)',
+                         'Area (sf)', 'Tilt wall panels', 'Panels', 'Slab on grade',
+                         'Total concrete', 'Steel section schedule', 'Pad size (ft)',
                          f'{self.model["summary"]["selected_weight_lbs"]:,.0f} lb']:
             self.assertIn(expected, text)
         self.assertNotIn('Detailed member schedule', text)

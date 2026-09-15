@@ -751,8 +751,14 @@ def calculate_project(project):
         # Concrete trade: tilt panel thickness (H/50), slab on grade, and a
         # roll-up that includes the footings already calculated above.
         import concrete
-        extra_takeoffs["tilt_wall_concrete"] = concrete.calculate_tilt_wall_concrete(
-            extra_takeoffs["walls"], (workflow.profile or {}).get("clear_height_ft") or p["clear_height_ft"])
+        clear_ft = (workflow.profile or {}).get("clear_height_ft") or p["clear_height_ft"]
+        # Panels follow the active footprint's real perimeter and step with the
+        # roof, rather than the original bounding-rectangle area takeoff.
+        wall_panels = concrete.build_perimeter_panels(
+            boundary, xs, ys, heights, clear_ft,
+            deck_ft=p["metal_deck_thickness_in"] / 12.0,
+            insulation_ft=p["insulation_depth_in"] / 12.0, active_bays=active)
+        extra_takeoffs["tilt_wall_concrete"] = concrete.summarize_perimeter_panels(wall_panels, clear_ft)
         extra_takeoffs["slab"] = concrete.calculate_slab(bays, p["slab_thickness_in"])
         extra_takeoffs["concrete_summary"] = concrete.summarize(
             extra_takeoffs["tilt_wall_concrete"], extra_takeoffs["slab"],
@@ -763,7 +769,7 @@ def calculate_project(project):
         column_positions = {m["id"]: (m["start"][0], m["start"][1])
                             for m in members if m["type"] == "column"}
         concrete_solids = concrete.build_solids(
-            bays, xs, ys, extra_takeoffs["tilt_wall_concrete"], extra_takeoffs["slab"],
+            bays, xs, ys, wall_panels, extra_takeoffs["slab"],
             extra_takeoffs["footings"], extra_takeoffs.get("mezzanine_footings"),
             column_positions)
 

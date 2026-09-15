@@ -444,22 +444,19 @@ class SteelReport:
         if self.y<280:self.page('Gross wall area')
         self.section('Tilt wall panels')
         tw=tf.get('tilt_wall_concrete') or {}
-        panels={p['key']:p for p in tw.get('panels',[])}
         rows=[]
-        for side in ['north','south','east','west']:
-            wall=tf['walls'][f'{side}_wall']
-            panel=panels.get(f'{side}_wall',{})
-            rows.append([side.title(),number(wall['length_ft']),
-                         number(panel.get('panel_height_ft',panel.get('governing_height_ft',0))),
-                         number(panel.get('unsupported_height_ft',panel.get('governing_height_ft',0))),
-                         number(panel.get('thickness_in',0),2),number(wall['area_sf'],0),
-                         number(panel.get('volume_cy',0),2)])
+        for e in tw.get('elevations',[]):
+            shape=(f"stepped {number(e['min_height_ft'],1)}-{number(e['max_height_ft'],1)}"
+                   if e.get('stepped') else number(e['max_height_ft'],1))
+            rows.append([f"{e['wall']} wall",str(e['panel_count']),shape,
+                         number(e['thickness_in'],2),number(e['area_sf'],0),number(e['volume_cy'],2)])
         summary=tw.get('summary',{})
-        rows.append(['TOTAL','','','',f"{number(summary.get('max_thickness_in',0),2)} max",
-                     number(tf['walls']['summary']['total_area_sf'],0),
+        rows.append(['TOTAL',str(summary.get('panel_count','')),'',
+                     number(summary.get('max_thickness_in',0),2),
+                     number(summary.get('total_area_sf',0),0),
                      number(summary.get('total_cy',0),2)])
-        self.table(['Wall','Length (ft)','Panel height (ft)','Clear height (ft)','Thickness (in)','Gross area (sf)','Concrete (CY)'],
-                   rows,[90,92,110,105,100,112,103],continuation='Tilt wall panels - continued')
+        self.table(['Elevation','Panels','Height (ft)','Thickness (in)','Area (sf)','Concrete (CY)'],
+                   rows,[130,70,140,120,125,127],continuation='Tilt wall panels - continued')
         if tw.get('method'):
             self.y -= self.paragraph(f"Panel thickness: {tw['method']}. {tw.get('basis','')}",
                                      MARGIN, self.y, CONTENT_W, 8)+8
