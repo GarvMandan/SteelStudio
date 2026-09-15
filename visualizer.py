@@ -50,12 +50,12 @@ class SteelStudioServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = False
 
-    def __init__(self, port, static_dir, adapter, project_result, host="127.0.0.1", public_host=""):
+    def __init__(self, port, static_dir, adapter, project_result, host="127.0.0.1", trust_proxy_host=False):
         self.static_dir = Path(static_dir).resolve()
         self.adapter = adapter
         self.project_result = project_result
         self.calculation_lock = threading.Lock()
-        self.public_host = public_host.lower()
+        self.trust_proxy_host = trust_proxy_host
         super().__init__((host, port), SteelStudioHandler)
 
 
@@ -90,20 +90,33 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
 
     def _local_request(self, head=False):
         port = self.server.server_port
-        allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
-        if port == 80:
-            allowed_hosts.update({"127.0.0.1", "localhost"})
-        # A deployed instance (e.g. behind Render's TLS-terminating proxy)
-        # is reached by its public hostname, not 127.0.0.1/localhost. Opt
-        # into that one extra host explicitly via env var; local desktop
-        # use is unaffected and stays localhost-only.
-        public_host = self.server.public_host
-        allowed_schemes = {"http"}
-        if public_host:
-            allowed_hosts.add(public_host)
-            allowed_schemes.add("https")
         host = self.headers.get("Host", "").lower()
-        if len(self.headers.get_all("Host", [])) != 1 or host not in allowed_hosts:
+        if len(self.headers.get_all("Host", [])) != 1:
+            self._json_response(403, {"error": "This service is available only on localhost."}, head)
+            return False
+
+        if self.server.trust_proxy_host:
+            # Deployed behind a TLS-terminating proxy (e.g. Render) reached
+            # by a domain chosen at deploy time -- often not knowable in
+            # advance (auto-generated subdomain, later a custom domain).
+            # There is no fixed hostname to allowlist here, so instead this
+            # enforces the actual property that matters: the request's own
+            # Origin, when present, must exactly match its own Host. That
+            # blocks a browser page on any *other* origin from calling this
+            # API (the real cross-site threat) regardless of what this
+            # service's own hostname happens to be. It does not by itself
+            # verify the Host is genuine, which relies on the proxy in front
+            # of it always forwarding the client's real Host -- true for
+            # Render and equivalent platforms fronting a single service.
+            allowed_hosts = {host}
+            allowed_schemes = {"https", "http"}
+        else:
+            allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+            if port == 80:
+                allowed_hosts.update({"127.0.0.1", "localhost"})
+            allowed_schemes = {"http"}
+
+        if host not in allowed_hosts:
             self._json_response(403, {"error": "This service is available only on localhost."}, head)
             return False
         origins = self.headers.get_all("Origin", [])
@@ -297,12 +310,12 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
         self._json_response(405, {"error": "Only same-origin GET and POST requests are supported."})
 
 
-def create_server(port=0, initial_project=None, static_dir=STATIC_DIR, adapter=None, host=None, public_host=None):
+def create_server(port=0, initial_project=None, static_dir=STATIC_DIR, adapter=None, host=None, trust_proxy_host=None):
     """Create the server; callers may serve it in a background thread.
 
-    `host`/`public_host` default from env so both local runs (unset, stays
-    127.0.0.1-only) and a cloud deploy (HOST=0.0.0.0, PUBLIC_HOST=<domain>)
-    work from the same entrypoint without extra flags.
+    `host`/`trust_proxy_host` default from env so both local runs (unset,
+    stays 127.0.0.1-only) and a cloud deploy (HOST=0.0.0.0,
+    TRUST_PROXY_HOST=1) work from the same entrypoint without extra flags.
     """
     root = Path(static_dir).resolve()
     if not (root / "index.html").is_file():
@@ -315,12 +328,9 @@ def create_server(port=0, initial_project=None, static_dir=STATIC_DIR, adapter=N
     result = adapter.calculate_project(project)
     json.dumps(result, allow_nan=False)
     host = host if host is not None else os.environ.get("HOST", "127.0.0.1")
-    if public_host is None:
-        # PUBLIC_HOST is the explicit override; RENDER_EXTERNAL_HOSTNAME is
-        # set automatically by Render on every service, so a Render deploy
-        # needs no extra config for this to resolve correctly.
-        public_host = os.environ.get("PUBLIC_HOST") or os.environ.get("RENDER_EXTERNAL_HOSTNAME", "")
-    return SteelStudioServer(port, root, adapter, result, host=host, public_host=public_host)
+    if trust_proxy_host is None:
+        trust_proxy_host = os.environ.get("TRUST_PROXY_HOST", "").strip().lower() in {"1", "true", "yes"}
+    return SteelStudioServer(port, root, adapter, result, host=host, trust_proxy_host=trust_proxy_host)
 
 
 def _write_status(path, payload):
@@ -367,12 +377,16 @@ def main(argv=None):
             if args.port is not None or env_port is not None or exc.errno not in {48, 98, 10048}:
                 raise
             server = create_server(0, initial_project)
-        scheme = "https" if server.public_host else "http"
-        display_host = server.public_host or "127.0.0.1"
-        url = f"{scheme}://{display_host}" if server.public_host else f"http://127.0.0.1:{server.server_port}"
+        if server.trust_proxy_host:
+            # The public hostname is only known once a request arrives (it
+            # may be a platform-assigned subdomain or a later custom
+            # domain), so there is no single URL to print or open here.
+            url = f"http://{server.server_address[0]}:{server.server_port} (internal bind address)"
+        else:
+            url = f"http://127.0.0.1:{server.server_port}"
         _write_status(args.status_file, {"status": "ready", "url": url})
         print(f"Steel Studio is ready at {url}\nKeep this process open. Press Ctrl+C to stop.", flush=True)
-        if not args.no_browser and not server.public_host:
+        if not args.no_browser and not server.trust_proxy_host:
             threading.Timer(0.3, webbrowser.open, args=(url,)).start()
         server.serve_forever(poll_interval=0.3)
     except KeyboardInterrupt:

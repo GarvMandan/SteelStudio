@@ -25,3 +25,6 @@ Structural_Steel_Report_*.pdf
 
 # Estimator workspace (projects and buildings on disk)
 /projects/
+
+# Claude Code session runtime state
+.claude/scheduled_tasks.lock

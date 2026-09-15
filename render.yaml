@@ -8,9 +8,8 @@ services:
     envVars:
       - key: HOST
         value: 0.0.0.0
-      # PUBLIC_HOST is intentionally not set here: visualizer.py falls back
-      # to RENDER_EXTERNAL_HOSTNAME, which Render injects automatically on
-      # every service and always matches the live public domain.
+      - key: TRUST_PROXY_HOST
+        value: "1"
       - key: PYTHON_VERSION
         value: 3.11.5
     healthCheckPath: /api/health
