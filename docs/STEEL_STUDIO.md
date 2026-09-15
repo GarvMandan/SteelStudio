@@ -12,6 +12,51 @@ Use **Open** to select a saved `.json` project. Studio accepts its own projects 
 
 The launcher uses the project's virtual environment. If it is unavailable, install the dependencies in `requirements.txt` into your Python environment, then run `py -3 visualizer.py`. Studio reuses the original desktop calculation workflow, including its workbook readers. The compiled frontend in `visualizer/dist` is included; Node.js is only needed for frontend development. All frontend assets are local.
 
+## Projects and buildings
+
+Steel Studio opens on the estimator home page. A **project** is a job; it
+contains one or more **buildings**, and each building carries its trades.
+Structural steel is designed today; concrete, HVAC, electrical and
+plumbing appear as not started.
+
+1. Type a project name and **Add project**.
+2. **Add building** opens the guided setup: overall width and length, bay
+   spacing across and along, and clear height. The plan preview redraws as
+   you type and reports the resulting bay grid and floor area. Spans are
+   fitted so the totals match the size you asked for. A layout needing
+   more than 24 bays on an axis is refused.
+3. Open a building to design it. The name in the top bar returns to the
+   project list.
+
+Buildings are stored as files under `projects/<project-id>/`, so a single
+building can be copied, emailed or archived on its own. Each successful
+calculation is written back, so the home page shows real quantities and
+work survives a server restart.
+
+**Work is also autosaved to the browser** every ten seconds and when the
+tab is hidden. If a session ends unexpectedly, reopening the building
+offers to restore the unsaved draft. Saving a `.steel.json` file remains
+the durable, portable export.
+
+## Ground snow load
+
+**Loads & foundations** can look up a published ground snow load. Enter a
+city and state and choose the basis (ASCE 7-16 or 7-22); the value, its
+source layer and the matched location are reported, and the load field is
+filled in. Where a location has no direct value -- a case-study zone, or
+somewhere with no mapped snow -- the reason is shown rather than a
+number. The ASCE Hazard Tool can be opened directly, and its output
+pasted in instead.
+
+Values are published ground snow loads for the located point, not a
+site-specific determination.
+
+## Additional load layers
+
+Each layer has a name, a colour, a psf value and its own set of bays.
+Click bays on the layer's map to include or exclude them, or use **Select
+all bays**. New layers start empty so coverage is deliberate.
+
 ## Design workflow
 
 1. Click the project name in the top bar to rename it.

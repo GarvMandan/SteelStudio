@@ -14,6 +14,10 @@ You can also run:
 
 From the original desktop application, **Open 3D Studio** opens a copy of your current project, including unsaved inputs and section assignments. The original desktop reports and tools remain available.
 
+- Open on the estimator home page: projects, the buildings each contains, and a status per trade.
+- **Add building** runs a guided setup - overall size, bay spacing, clear height - with a live plan preview.
+- Look up a ground snow load by city and state, or paste the ASCE Hazard Tool output.
+- Work is autosaved to the browser and recovered after an unexpected close; buildings are stored on disk under `projects/`.
 - Start with an editable building plan: drag interior grid lines, select bay dimensions, or create a regular grid.
 - Use full-width workspaces for building layout, mezzanines, roof design, loads and foundations, and takeoffs. **Grid & dimensions** opens a wide grid editor.
 - Draw, move, and resize mezzanine areas on the plan. Set their elevation, floor loads, joist direction, internal framing bays, and individual panel joist spaces, then review dedicated mezzanine calculations and exports.
