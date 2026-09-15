@@ -15,7 +15,7 @@ function check(name, ok, detail = '') {
   console.log(`  ${ok ? 'OK  ' : 'FAIL'} ${name}${detail ? ' — ' + detail : ''}`);
 }
 
-const browser = await chromium.launch({channel, headless: true});
+const browser = await chromium.launch({channel, headless: false});
 const context = await browser.newContext();
 const page = await context.newPage();
 page.on('pageerror', e => { failures++; console.log('  PAGE ERROR:', e.message); });
@@ -50,9 +50,14 @@ const model = await page.evaluate(async () => (await (await fetch('/api/project'
 const panels = model.takeoffs.tilt_wall_concrete.panels;
 check('H/50: panels calculated', panels.length === 4, `${panels.length} panels`);
 const expected = h => Math.max(7.5, Math.ceil((h * 12 / 50 - 1e-9) * 2) / 2);
-const allRight = panels.every(p => Math.abs(p.thickness_in - expected(p.governing_height_ft)) < 1e-9);
-check('H/50: thickness matches the rule', allRight,
-  panels.map(p => `${p.wall} ${p.governing_height_ft.toFixed(1)}ft->${p.thickness_in}"`).join(' '));
+const clear = model.project.clear_height_ft;
+const allRight = panels.every(p => Math.abs(p.thickness_in - expected(p.unsupported_height_ft)) < 1e-9);
+check('thickness matches clear-height/50', allRight,
+  panels.map(p => `${p.wall} clear ${p.unsupported_height_ft}ft->${p.thickness_in}"`).join(' '));
+check('thickness uses clear height, not panel height',
+  panels.every(p => Math.abs(p.unsupported_height_ft - clear) < 0.01
+    && p.panel_height_ft > p.unsupported_height_ft),
+  `clear ${clear} vs panels ${panels.map(p => p.panel_height_ft.toFixed(1)).join('/')}`);
 check('H/50: above the 7.5in minimum on a tall wall',
   panels.every(p => p.thickness_in > 7.5), panels.map(p => p.thickness_in).join(', '));
 check('H/50: all half-inch multiples', panels.every(p => (p.thickness_in * 2) % 1 === 0));
@@ -104,6 +109,32 @@ check('3D: unchecking slab hides those meshes', after === -1 || after < total, `
 await page.getByLabel('Slab on grade').check();
 await page.waitForTimeout(500);
 check('3D: rechecking restores them', (await visible()) === -1 || (await visible()) === total);
+
+// Regression: hovering a concrete solid used to read .section on an object
+// that has none, throwing and blanking the whole app.
+const cbox = await page.locator('.canvas-mount canvas').boundingBox();
+for (let i = 0; i < 12; i++) {
+  await page.mouse.move(cbox.x + cbox.width * (0.2 + 0.05 * i), cbox.y + cbox.height * (0.45 + 0.03 * (i % 6)));
+  await page.waitForTimeout(140);
+}
+check('3D: app survives hovering concrete',
+  (await page.locator('body').textContent()).length > 200);
+
+const picked = await page.evaluate(() => {
+  const s = window.__steelScene, m = s.concreteMeshes.find(x => x.userData.member.type === 'footing');
+  if (!m) return null;
+  s.settings.joist = false; s.settings.girder = false; s.settings.column = false; s.setSettings({});
+  s.camera.position.set(m.position.x + 7, m.position.y + 5, m.position.z + 7);
+  s.controls.target.copy(m.position); s.controls.update(); s.tween = null;
+  return m.userData.member.id;
+});
+await page.waitForTimeout(1400);
+await page.mouse.click(cbox.x + cbox.width / 2, cbox.y + cbox.height / 2);
+await page.waitForTimeout(1200);
+check('3D: selecting a footing opens the concrete inspector',
+  (await page.locator('.concrete-inspect').count()) === 1, picked || 'no footing');
+check('3D: app still alive after selecting concrete',
+  (await page.locator('body').textContent()).length > 200);
 
 await browser.close();
 console.log(failures ? `\n${failures} FAILURES` : '\nALL PASS');

@@ -358,3 +358,8 @@ button.brand{background:none;border:0;cursor:pointer;font:inherit;color:inherit;
    and keep it compact when opened. */
 .studio-workspace .layout-roof{flex:0 0 auto;margin-bottom:14px}
 .studio-workspace .layout-roof .roof-section{height:150px;min-height:150px}
+
+/* Concrete element inspector */
+.concrete-inspect{padding:4px 0}
+.concrete-inspect h2{margin:0 0 6px;font-size:16px}
+.concrete-inspect .hint{margin:0 0 12px;font-size:12px;line-height:1.55}

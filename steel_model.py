@@ -751,7 +751,8 @@ def calculate_project(project):
         # Concrete trade: tilt panel thickness (H/50), slab on grade, and a
         # roll-up that includes the footings already calculated above.
         import concrete
-        extra_takeoffs["tilt_wall_concrete"] = concrete.calculate_tilt_wall_concrete(extra_takeoffs["walls"])
+        extra_takeoffs["tilt_wall_concrete"] = concrete.calculate_tilt_wall_concrete(
+            extra_takeoffs["walls"], (workflow.profile or {}).get("clear_height_ft") or p["clear_height_ft"])
         extra_takeoffs["slab"] = concrete.calculate_slab(bays, p["slab_thickness_in"])
         extra_takeoffs["concrete_summary"] = concrete.summarize(
             extra_takeoffs["tilt_wall_concrete"], extra_takeoffs["slab"],

@@ -449,15 +449,17 @@ class SteelReport:
         for side in ['north','south','east','west']:
             wall=tf['walls'][f'{side}_wall']
             panel=panels.get(f'{side}_wall',{})
-            rows.append([side.title(),number(wall['length_ft']),number(panel.get('governing_height_ft',0)),
+            rows.append([side.title(),number(wall['length_ft']),
+                         number(panel.get('panel_height_ft',panel.get('governing_height_ft',0))),
+                         number(panel.get('unsupported_height_ft',panel.get('governing_height_ft',0))),
                          number(panel.get('thickness_in',0),2),number(wall['area_sf'],0),
                          number(panel.get('volume_cy',0),2)])
         summary=tw.get('summary',{})
-        rows.append(['TOTAL','','',f"{number(summary.get('max_thickness_in',0),2)} max",
+        rows.append(['TOTAL','','','',f"{number(summary.get('max_thickness_in',0),2)} max",
                      number(tf['walls']['summary']['total_area_sf'],0),
                      number(summary.get('total_cy',0),2)])
-        self.table(['Wall','Length (ft)','Height (ft)','Thickness (in)','Gross area (sf)','Concrete (CY)'],
-                   rows,[110,100,100,120,140,142],continuation='Tilt wall panels - continued')
+        self.table(['Wall','Length (ft)','Panel height (ft)','Clear height (ft)','Thickness (in)','Gross area (sf)','Concrete (CY)'],
+                   rows,[90,92,110,105,100,112,103],continuation='Tilt wall panels - continued')
         if tw.get('method'):
             self.y -= self.paragraph(f"Panel thickness: {tw['method']}. {tw.get('basis','')}",
                                      MARGIN, self.y, CONTENT_W, 8)+8

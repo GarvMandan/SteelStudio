@@ -7,8 +7,13 @@ added to the structural steel base.
 Tilt wall thickness uses the fast H/50 sizing rule rather than a full
 ACI 318 service-load analysis:
 
-    thickness = unsupported panel height (in) / 50
+    thickness = unsupported height (in) / 50
     rounded UP to the nearest 1/2 inch, never below 7.5 in
+
+The unsupported height is the building clear height -- the span between
+the slab and the roof diaphragm that braces the panel top. It is not the
+full panel height, which also carries roof slope, parapet and the foot of
+panel below grade, none of which is unsupported.
 
 This is a preliminary estimating rule for standard commercial and
 industrial panels under roughly 15-20 psf wind, not a panel design. It
@@ -66,8 +71,12 @@ def _wall_height(wall):
     return max(heights) if heights else 0.0
 
 
-def calculate_tilt_wall_concrete(walls):
-    """Panel thickness and concrete volume for each tilt wall elevation."""
+def calculate_tilt_wall_concrete(walls, clear_height_ft=None):
+    """Panel thickness and concrete volume for each tilt wall elevation.
+
+    `clear_height_ft` is the unsupported height that governs thickness. When
+    it is not supplied the full wall height is used, which is conservative.
+    """
     if not isinstance(walls, dict):
         raise InputValidationError("Wall takeoff data is unavailable.")
     panels = []
@@ -78,15 +87,20 @@ def calculate_tilt_wall_concrete(walls):
             continue
         area_sf = float(wall.get("area_sf") or 0.0)
         height_ft = _wall_height(wall)
-        thickness_in = required_thickness_in(height_ft)
-        raw_in = round(height_ft * 12.0 / HEIGHT_DIVISOR, 3)
+        # Thickness follows the unsupported (clear) height; the panel's own
+        # height still drives its area and therefore its concrete volume.
+        unsupported_ft = float(clear_height_ft) if clear_height_ft else height_ft
+        thickness_in = required_thickness_in(unsupported_ft)
+        raw_in = round(unsupported_ft * 12.0 / HEIGHT_DIVISOR, 3)
         volume_cy = area_sf * (thickness_in / 12.0) / CUBIC_FEET_PER_YARD
         total_cy += volume_cy
         panels.append({
             "wall": key.replace("_wall", "").title(),
             "key": key,
             "length_ft": round(float(wall.get("length_ft") or 0.0), 3),
-            "governing_height_ft": round(height_ft, 3),
+            "panel_height_ft": round(height_ft, 3),
+            "unsupported_height_ft": round(unsupported_ft, 3),
+            "governing_height_ft": round(unsupported_ft, 3),
             "area_sf": round(area_sf, 3),
             "required_thickness_raw_in": raw_in,
             "thickness_in": thickness_in,
@@ -95,13 +109,14 @@ def calculate_tilt_wall_concrete(walls):
         })
     return {
         "panels": panels,
-        "method": "H/50, rounded up to the nearest 1/2 in, minimum 7.5 in",
+        "method": "Clear height / 50, rounded up to the nearest 1/2 in, minimum 7.5 in",
         "minimum_thickness_in": MIN_THICKNESS_IN,
         "basis": (
-            "Preliminary estimating rule for standard panels under roughly "
-            "15-20 psf wind. Not an ACI 318 panel design: no out-of-plane "
-            "P-Delta check, no reinforcement sizing, no H/150 deflection "
-            "verification."
+            "Thickness from the unsupported (clear) height between slab and "
+            "roof diaphragm. Preliminary estimating rule for standard panels "
+            "under roughly 15-20 psf wind. Not an ACI 318 panel design: no "
+            "out-of-plane P-Delta check, no reinforcement sizing, no H/150 "
+            "deflection verification."
         ),
         "summary": {
             "panel_count": len(panels),
