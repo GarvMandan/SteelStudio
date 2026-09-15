@@ -50,12 +50,13 @@ class SteelStudioServer(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = False
 
-    def __init__(self, port, static_dir, adapter, project_result):
+    def __init__(self, port, static_dir, adapter, project_result, host="127.0.0.1", public_host=""):
         self.static_dir = Path(static_dir).resolve()
         self.adapter = adapter
         self.project_result = project_result
         self.calculation_lock = threading.Lock()
-        super().__init__(("127.0.0.1", port), SteelStudioHandler)
+        self.public_host = public_host.lower()
+        super().__init__((host, port), SteelStudioHandler)
 
 
 class SteelStudioHandler(BaseHTTPRequestHandler):
@@ -92,12 +93,21 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
         allowed_hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
         if port == 80:
             allowed_hosts.update({"127.0.0.1", "localhost"})
+        # A deployed instance (e.g. behind Render's TLS-terminating proxy)
+        # is reached by its public hostname, not 127.0.0.1/localhost. Opt
+        # into that one extra host explicitly via env var; local desktop
+        # use is unaffected and stays localhost-only.
+        public_host = self.server.public_host
+        allowed_schemes = {"http"}
+        if public_host:
+            allowed_hosts.add(public_host)
+            allowed_schemes.add("https")
         host = self.headers.get("Host", "").lower()
         if len(self.headers.get_all("Host", [])) != 1 or host not in allowed_hosts:
             self._json_response(403, {"error": "This service is available only on localhost."}, head)
             return False
         origins = self.headers.get_all("Origin", [])
-        if origins and (len(origins) != 1 or origins[0] != f"http://{host}"):
+        if origins and (len(origins) != 1 or origins[0] not in {f"{s}://{host}" for s in allowed_schemes}):
             self._json_response(403, {"error": "Cross-origin requests are not permitted."}, head)
             return False
         if self.headers.get("Sec-Fetch-Site") == "cross-site":
@@ -109,13 +119,17 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
         self.do_GET(head=True)
 
     def do_GET(self, head=False):
+        path = urlsplit(self.path).path
+        # Exempt from the host/origin gate: a platform health checker (e.g.
+        # Render's) probes over the internal network without the app's own
+        # Host/Origin headers, and this endpoint reveals nothing sensitive.
+        if path == "/api/health":
+            self._json_response(200, {"status": "ok", "app": "Steel Studio"}, head)
+            return
         if not self._local_request(head):
             return
         try:
-            path = urlsplit(self.path).path
-            if path == "/api/health":
-                self._json_response(200, {"status": "ok", "app": "Steel Studio"}, head)
-            elif path == "/api/project":
+            if path == "/api/project":
                 with self.server.calculation_lock:
                     result = self.server.project_result
                 self._json_response(200, result, head)
@@ -283,8 +297,13 @@ class SteelStudioHandler(BaseHTTPRequestHandler):
         self._json_response(405, {"error": "Only same-origin GET and POST requests are supported."})
 
 
-def create_server(port=0, initial_project=None, static_dir=STATIC_DIR, adapter=None):
-    """Create a loopback server; callers may serve it in a background thread."""
+def create_server(port=0, initial_project=None, static_dir=STATIC_DIR, adapter=None, host=None, public_host=None):
+    """Create the server; callers may serve it in a background thread.
+
+    `host`/`public_host` default from env so both local runs (unset, stays
+    127.0.0.1-only) and a cloud deploy (HOST=0.0.0.0, PUBLIC_HOST=<domain>)
+    work from the same entrypoint without extra flags.
+    """
     root = Path(static_dir).resolve()
     if not (root / "index.html").is_file():
         raise RuntimeError(
@@ -295,7 +314,9 @@ def create_server(port=0, initial_project=None, static_dir=STATIC_DIR, adapter=N
     project = adapter.defaults() if initial_project is None else initial_project
     result = adapter.calculate_project(project)
     json.dumps(result, allow_nan=False)
-    return SteelStudioServer(port, root, adapter, result)
+    host = host if host is not None else os.environ.get("HOST", "127.0.0.1")
+    public_host = public_host if public_host is not None else os.environ.get("PUBLIC_HOST", "")
+    return SteelStudioServer(port, root, adapter, result, host=host, public_host=public_host)
 
 
 def _write_status(path, payload):
@@ -326,17 +347,28 @@ def main(argv=None):
             initial_project = _parse_json(raw)
             if not isinstance(initial_project, dict):
                 raise ValueError("The project must be a JSON object.")
-        port = DEFAULT_PORT if args.port is None else args.port
+        # $PORT is how Render (and most PaaS hosts) tell the app which port
+        # to bind; it takes precedence over --port/DEFAULT_PORT so the same
+        # entrypoint works unmodified as a deployed service.
+        env_port = os.environ.get("PORT")
+        if args.port is not None:
+            port = args.port
+        elif env_port is not None:
+            port = int(env_port)
+        else:
+            port = DEFAULT_PORT
         try:
             server = create_server(port, initial_project)
         except OSError as exc:
-            if args.port is not None or exc.errno not in {48, 98, 10048}:
+            if args.port is not None or env_port is not None or exc.errno not in {48, 98, 10048}:
                 raise
             server = create_server(0, initial_project)
-        url = f"http://127.0.0.1:{server.server_port}"
+        scheme = "https" if server.public_host else "http"
+        display_host = server.public_host or "127.0.0.1"
+        url = f"{scheme}://{display_host}" if server.public_host else f"http://127.0.0.1:{server.server_port}"
         _write_status(args.status_file, {"status": "ready", "url": url})
         print(f"Steel Studio is ready at {url}\nKeep this process open. Press Ctrl+C to stop.", flush=True)
-        if not args.no_browser:
+        if not args.no_browser and not server.public_host:
             threading.Timer(0.3, webbrowser.open, args=(url,)).start()
         server.serve_forever(poll_interval=0.3)
     except KeyboardInterrupt:

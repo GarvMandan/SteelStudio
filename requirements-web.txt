@@ -1,0 +1,7 @@
+# Minimal dependencies for running visualizer.py as a hosted web service
+# (e.g. on Render). Excludes desktop-only packages (matplotlib,
+# pyinstaller, ttkbootstrap, pywin32-ctypes) that grid_gui.py needs but
+# the web server never imports.
+openpyxl==3.1.5
+pillow==12.3.0
+reportlab==5.0.1

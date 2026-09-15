@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: steel-studio
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements-web.txt
+    startCommand: python visualizer.py --no-browser
+    envVars:
+      - key: HOST
+        value: 0.0.0.0
+      - key: PUBLIC_HOST
+        fromService:
+          type: web
+          name: steel-studio
+          property: host
+      - key: PYTHON_VERSION
+        value: 3.11.5
+    healthCheckPath: /api/health

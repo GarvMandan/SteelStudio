@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import re
+import os
 import shutil
 import time
 import uuid
@@ -29,7 +30,10 @@ from pathlib import Path
 
 from calculation_engine import InputValidationError
 
-ROOT = Path(__file__).resolve().parent / "projects"
+# STEEL_STUDIO_DATA_DIR lets a deployment point storage at a mounted
+# persistent disk (e.g. Render's disk feature). Without it, projects are
+# lost on every restart/redeploy on hosts with an ephemeral filesystem.
+ROOT = Path(os.environ.get("STEEL_STUDIO_DATA_DIR") or Path(__file__).resolve().parent / "projects")
 MAX_NAME = 120
 # A project with this many buildings is far past anything real; the cap
 # exists so a runaway client cannot fill the disk.
